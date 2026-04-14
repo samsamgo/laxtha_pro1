@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Inter", "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  color: #111827;
+  background-color: #F4F7FB;
+}
+
+body {
+  margin: 0;
+  background-color: #F4F7FB;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@layer components {
+  .fx2-card {
+    @apply rounded-card bg-fx2-card shadow-card p-5;
+  }
+
+  .fx2-title {
+    @apply text-base font-semibold text-fx2-text;
+  }
+
+  .fx2-value {
+    @apply text-2xl font-bold tracking-tight text-fx2-text;
+  }
+
+  .fx2-muted {
+    @apply text-sm text-fx2-muted;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+  }
+}

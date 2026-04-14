@@ -2,7 +2,35 @@ import LineChartCard from "../components/LineChartCard";
 import StatusCard from "../components/StatusCard";
 import { useFx2Realtime } from "../hooks/useFx2Realtime";
 
-const WS_URL = "ws://localhost:8080/fx2";
+const DEFAULT_WS_URL = "ws://localhost:8080/fx2";
+
+const normalizeWebSocketUrl = (value: string) => {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return DEFAULT_WS_URL;
+  }
+
+  const normalizedInput = /^wss?:\/\//.test(trimmed) ? trimmed : `ws://${trimmed}`;
+
+  try {
+    const url = new URL(normalizedInput);
+
+    if (url.pathname === "/" || !url.pathname) {
+      url.pathname = "/fx2";
+    }
+
+    return url.toString();
+  } catch {
+    if (normalizedInput.endsWith("/fx2")) {
+      return normalizedInput;
+    }
+
+    return `${normalizedInput.replace(/\/+$/, "")}/fx2`;
+  }
+};
+
+const WS_URL = normalizeWebSocketUrl(import.meta.env.VITE_FX2_WS_URL || DEFAULT_WS_URL);
 
 const formatDuration = (seconds: number) => {
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
@@ -36,6 +64,7 @@ export default function LivePage() {
       <section className="fx2-card col-span-12 sm:col-span-6 xl:col-span-3">
         <h2 className="fx2-muted mb-3">데모 제어 패널</h2>
         <p className="mb-3 text-xs text-fx2-muted">active mode: {activeMode}</p>
+        <p className="mb-3 break-all text-xs text-fx2-muted">endpoint: {WS_URL}</p>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <button onClick={switchToWebSocket} className="rounded-xl bg-fx2-primary px-3 py-2 font-semibold text-white">WS 재연결</button>
           <button onClick={switchToMock} className="rounded-xl bg-slate-100 px-3 py-2 font-semibold text-fx2-text">Mock 전환</button>

@@ -88,9 +88,12 @@ export class Fx2WebSocketService {
     };
   }
 
-  setBaseState(state: Fx2State) {
+  setBaseState(state: Fx2State, emit = false) {
     this.currentState = state;
-    this.emit({ type: "data", payload: state });
+
+    if (emit) {
+      this.emit({ type: "data", payload: state });
+    }
   }
 
   private setStatus(next: Fx2ConnectionStatus) {

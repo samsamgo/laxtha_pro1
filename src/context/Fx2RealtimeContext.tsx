@@ -14,9 +14,14 @@ import {
   buildMessageFromState,
   createInitialFx2State,
   createMockMessage,
+  parseHardwarePayload,
   summarizeFx2State
 } from "../lib/fx2Realtime";
 import { getDefaultWebSocketUrl, normalizeWebSocketUrl } from "../lib/socketUrl";
+import {
+  Fx2HardwareService,
+  type Fx2HardwareStatus,
+} from "../services/fx2Hardware";
 import { Fx2WebSocketService, type Fx2ConnectionStatus } from "../services/fx2WebSocket";
 import type { DeviceMode, Fx2IncomingMessage, Fx2State, SessionSource } from "../types/fx2";
 
@@ -32,6 +37,8 @@ interface Fx2RealtimeContextValue {
   sessionPhase: SessionPhase;
   websocketUrl: string;
   connectionStatus: Fx2ConnectionStatus;
+  hardwareStatus: Fx2HardwareStatus;
+  hardwareDetail: string;
   hasRemoteData: boolean;
   setSelectedMode: (mode: DeviceMode) => void;
   setSessionSource: (source: SessionSource) => void;
@@ -39,6 +46,7 @@ interface Fx2RealtimeContextValue {
   startSession: () => void;
   stopSession: () => void;
   reconnectRemote: () => void;
+  disconnectHardware: () => void;
   pushManualUpdate: (patch: Partial<Fx2IncomingMessage>) => boolean;
   applyPreset: (preset: DemoPreset) => void;
 }
@@ -64,13 +72,22 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [websocketUrl, setWebsocketUrlState] = useState(() => getDefaultWebSocketUrl());
   const [state, setState] = useState<Fx2State>(() => createInitialFx2State("demo"));
   const [connectionStatus, setConnectionStatus] = useState<Fx2ConnectionStatus>("disconnected");
+  const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
+  const [hardwareDetail, setHardwareDetail] = useState("");
   const [hasRemoteData, setHasRemoteData] = useState(false);
 
   const serviceRef = useRef(new Fx2WebSocketService(createInitialFx2State("demo")));
+  const hardwareRef = useRef(new Fx2HardwareService());
   const mockTimerRef = useRef<number | null>(null);
+  const stateRef = useRef(state);
   const hasSeededStatusRef = useRef(false);
   const hasSeededDataRef = useRef(false);
   const suppressDisconnectNoticeRef = useRef(false);
+  const ignoredEchoTimestampsRef = useRef(new Set<number>());
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     const service = serviceRef.current;
@@ -114,6 +131,16 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         return;
       }
 
+      const payloadTimestamp = Date.parse(event.payload.lastUpdated);
+
+      if (
+        Number.isFinite(payloadTimestamp) &&
+        ignoredEchoTimestampsRef.current.has(payloadTimestamp)
+      ) {
+        ignoredEchoTimestampsRef.current.delete(payloadTimestamp);
+        return;
+      }
+
       setHasRemoteData(true);
       setSelectedModeState(event.payload.mode);
       setSessionPhase("running");
@@ -122,12 +149,74 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   useEffect(() => {
+    const hardware = hardwareRef.current;
+
+    return hardware.subscribe((event) => {
+      if (event.type === "status") {
+        setHardwareStatus(event.status);
+        setHardwareDetail(event.detail ?? "");
+
+        if (event.status === "error" || event.status === "unsupported") {
+          setState((prev) => ({
+            ...prev,
+            logs: appendLog(
+              prev.logs,
+              event.detail || "하드웨어 연결 상태를 확인해 주세요."
+            ),
+          }));
+        }
+
+        const statusDetail = event.detail;
+
+        if (event.status === "connected" && statusDetail) {
+          setState((prev) => ({
+            ...prev,
+            logs: appendLog(prev.logs, statusDetail),
+          }));
+        }
+
+        return;
+      }
+
+      const nextMessage = parseHardwarePayload(
+        event.raw,
+        event.mode,
+        stateRef.current
+      );
+
+      if (!nextMessage) {
+        setState((prev) => ({
+          ...prev,
+          logs: appendLog(
+            prev.logs,
+            `[${event.mode.toUpperCase()}] 수신 값을 해석하지 못했습니다: ${event.raw}`
+          ),
+        }));
+        return;
+      }
+
+      applyLocalMessage(nextMessage, setState, serviceRef.current);
+      setSelectedModeState(nextMessage.mode);
+      setSessionPhase("running");
+
+      if (sessionSource === "remote" && serviceRef.current.getStatus() === "connected") {
+        ignoredEchoTimestampsRef.current.add(nextMessage.timestamp);
+
+        if (!serviceRef.current.send(nextMessage)) {
+          ignoredEchoTimestampsRef.current.delete(nextMessage.timestamp);
+        }
+      }
+    });
+  }, [sessionSource]);
+
+  useEffect(() => {
     return () => {
       if (mockTimerRef.current !== null) {
         window.clearInterval(mockTimerRef.current);
       }
       suppressDisconnectNoticeRef.current = true;
       serviceRef.current.disconnect();
+      void hardwareRef.current.disconnect();
     };
   }, []);
 
@@ -145,10 +234,22 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     serviceRef.current.setBaseState(freshState);
   };
 
+  const connectHardware = async (mode: Extract<DeviceMode, "bluetooth" | "uart">) => {
+    const connected =
+      mode === "bluetooth"
+        ? await hardwareRef.current.connectBluetooth()
+        : await hardwareRef.current.connectUart();
+
+    if (!connected) {
+      setSessionPhase("idle");
+    }
+  };
+
   const startSession = () => {
     const normalizedUrl = normalizeWebSocketUrl(websocketUrl);
 
     stopMockFeed();
+    void hardwareRef.current.disconnect();
     suppressDisconnectNoticeRef.current = true;
     serviceRef.current.disconnect();
     setWebsocketUrlState(normalizedUrl);
@@ -167,12 +268,25 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       return;
     }
 
-    setConnectionStatus("waiting");
-    serviceRef.current.connect(normalizedUrl);
+    if (selectedMode === "demo") {
+      setConnectionStatus("waiting");
+      serviceRef.current.connect(normalizedUrl);
+      return;
+    }
+
+    if (sessionSource === "remote") {
+      setConnectionStatus("waiting");
+      serviceRef.current.connect(normalizedUrl);
+      return;
+    }
+
+    setConnectionStatus("disconnected");
+    void connectHardware(selectedMode);
   };
 
   const stopSession = () => {
     stopMockFeed();
+    void hardwareRef.current.disconnect();
     suppressDisconnectNoticeRef.current = true;
     serviceRef.current.disconnect();
     setSessionPhase("stopped");
@@ -187,7 +301,15 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     const nextMessage = buildMessageFromState({ ...state, mode: selectedMode }, { ...patch, mode: selectedMode });
 
     if (sessionSource === "remote" && connectionStatus === "connected") {
-      return serviceRef.current.send(nextMessage);
+      ignoredEchoTimestampsRef.current.add(nextMessage.timestamp);
+
+      const sent = serviceRef.current.send(nextMessage);
+
+      if (!sent) {
+        ignoredEchoTimestampsRef.current.delete(nextMessage.timestamp);
+      }
+
+      return sent;
     }
 
     applyLocalMessage(nextMessage, setState, serviceRef.current);
@@ -248,6 +370,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     serviceRef.current.connect(normalizeWebSocketUrl(websocketUrl));
   };
 
+  const disconnectHardware = () => {
+    void hardwareRef.current.disconnect();
+  };
+
   const setSelectedMode = (mode: DeviceMode) => {
     setSelectedModeState(mode);
 
@@ -271,6 +397,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       sessionPhase,
       websocketUrl,
       connectionStatus,
+      hardwareStatus,
+      hardwareDetail,
       hasRemoteData,
       setSelectedMode,
       setSessionSource,
@@ -278,10 +406,21 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       startSession,
       stopSession,
       reconnectRemote,
+      disconnectHardware,
       pushManualUpdate,
       applyPreset
     }),
-    [connectionStatus, hasRemoteData, selectedMode, sessionPhase, sessionSource, state, websocketUrl]
+    [
+      connectionStatus,
+      hardwareDetail,
+      hardwareStatus,
+      hasRemoteData,
+      selectedMode,
+      sessionPhase,
+      sessionSource,
+      state,
+      websocketUrl,
+    ]
   );
 
   return <Fx2RealtimeContext.Provider value={value}>{children}</Fx2RealtimeContext.Provider>;

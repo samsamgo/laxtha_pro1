@@ -3,6 +3,7 @@ import type { DeviceMode, Fx2IncomingMessage, Fx2SessionStats, Fx2State, SignalS
 const WAVE_HISTORY_LIMIT = 72;
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
+const WAVE_SEGMENT_SIZE = 4;
 
 const seedWave = (phase: number, amplitude = 1) =>
   Array.from({ length: 36 }, (_, index) => Math.sin((index + phase) / 3) * amplitude + (Math.random() - 0.5) * 0.16);
@@ -10,6 +11,84 @@ const seedWave = (phase: number, amplitude = 1) =>
 const clampArray = <T,>(values: T[], max: number) => values.slice(Math.max(values.length - max, 0));
 
 const roundToSingleDecimal = (value: number) => Math.round(value * 10) / 10;
+
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const interpolateWaveSegment = (
+  previousValue: number,
+  nextValue: number,
+  sampleCount = WAVE_SEGMENT_SIZE
+) =>
+  Array.from({ length: sampleCount }, (_, index) => {
+    const step = (index + 1) / sampleCount;
+    const drift = previousValue + (nextValue - previousValue) * step;
+    const shimmer = Math.sin((index + 1) * 1.35) * 0.08;
+    return roundToSingleDecimal(drift + shimmer);
+  });
+
+const appendWaveSegment = (history: number[], nextValue: number) => {
+  const previousValue = history[history.length - 1] ?? nextValue;
+  return clampArray(
+    [...history, ...interpolateWaveSegment(previousValue, nextValue)],
+    WAVE_HISTORY_LIMIT
+  );
+};
+
+const toBoolean = (value: unknown, fallback: boolean) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (["1", "true", "yes", "y", "on", "connected"].includes(normalized)) {
+      return true;
+    }
+
+    if (["0", "false", "no", "n", "off", "disconnected"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return fallback;
+};
+
+const toNumber = (value: unknown, fallback: number) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+};
+
+const toConnection = (
+  value: unknown,
+  fallback: Fx2IncomingMessage["connection"]
+): Fx2IncomingMessage["connection"] => {
+  if (value === "connected" || value === "disconnected") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "connected" ? "connected" : fallback;
+  }
+
+  return fallback;
+};
 
 const createEmptyStats = (): Fx2SessionStats => ({
   sampleCount: 0,
@@ -81,6 +160,75 @@ export const buildMessageFromState = (
   timestamp: patch.timestamp ?? Date.now()
 });
 
+export const parseHardwarePayload = (
+  rawPayload: string,
+  mode: Extract<DeviceMode, "bluetooth" | "uart">,
+  fallbackState: Fx2State
+): Fx2IncomingMessage | null => {
+  const trimmed = rawPayload.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const fallbackMessage = buildMessageFromState(fallbackState, {
+    mode,
+  });
+
+  let candidate: Record<string, unknown> | null = null;
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      candidate = parsed as Record<string, unknown>;
+    }
+  } catch {
+    const tokens = trimmed
+      .split(",")
+      .map((token) => token.trim())
+      .filter(Boolean);
+
+    if (tokens.length >= 7) {
+      candidate = {
+        ch1: tokens[0],
+        ch2: tokens[1],
+        bpm: tokens[2],
+        wearing: tokens[3],
+        signalQuality: tokens[4],
+        connection: tokens[5],
+        noise: tokens[6],
+        timestamp: tokens[7],
+      };
+    }
+  }
+
+  if (!candidate) {
+    return null;
+  }
+
+  return {
+    mode:
+      candidate.mode === "demo" ||
+      candidate.mode === "bluetooth" ||
+      candidate.mode === "uart"
+        ? candidate.mode
+        : mode,
+    ch1: clampNumber(toNumber(candidate.ch1, fallbackMessage.ch1), -120, 120),
+    ch2: clampNumber(toNumber(candidate.ch2, fallbackMessage.ch2), -120, 120),
+    bpm: clampNumber(Math.round(toNumber(candidate.bpm, fallbackMessage.bpm)), 30, 220),
+    wearing: toBoolean(candidate.wearing, fallbackMessage.wearing),
+    signalQuality: clampNumber(
+      Math.round(toNumber(candidate.signalQuality, fallbackMessage.signalQuality)),
+      0,
+      100
+    ),
+    connection: toConnection(candidate.connection, fallbackMessage.connection),
+    noise: toBoolean(candidate.noise, fallbackMessage.noise),
+    timestamp: Math.round(toNumber(candidate.timestamp, Date.now())),
+  };
+};
+
 export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
   const timestamp = Date.now();
   const sampleIndex = prev.stats.sampleCount + 1;
@@ -118,6 +266,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const averageSignalQuality =
     ((prev.stats.averageSignalQuality * prev.stats.sampleCount) + message.signalQuality) / nextSampleCount;
   const ppgValue = message.bpm / 100 + (message.signalQuality - 60) / 500;
+  const nextCh1 = appendWaveSegment(prev.ch1, message.ch1);
+  const nextCh2 = appendWaveSegment(prev.ch2, message.ch2);
+  const nextPpg = appendWaveSegment(prev.ppg, ppgValue);
 
   return {
     ...prev,
@@ -128,9 +279,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     heartRate: message.bpm,
     signalQuality: message.signalQuality,
     noise: message.noise,
-    ch1: clampArray([...prev.ch1, message.ch1], WAVE_HISTORY_LIMIT),
-    ch2: clampArray([...prev.ch2, message.ch2], WAVE_HISTORY_LIMIT),
-    ppg: clampArray([...prev.ppg, ppgValue], WAVE_HISTORY_LIMIT),
+    ch1: nextCh1,
+    ch2: nextCh2,
+    ppg: nextPpg,
     heartRateHistory: clampArray([...prev.heartRateHistory, message.bpm], METRIC_HISTORY_LIMIT),
     signalQualityHistory: clampArray([...prev.signalQualityHistory, message.signalQuality], METRIC_HISTORY_LIMIT),
     sessionSeconds: Math.max(0, Math.floor((message.timestamp - sessionStartedAtMs) / 1000)),

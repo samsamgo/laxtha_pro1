@@ -7,20 +7,22 @@ export default {
         fx2: {
           bg: "#F4F7FB",
           card: "#FFFFFF",
+          surface: "#EAF0F8",
           primary: "#2563EB",
           secondary: "#06B6D4",
           text: "#111827",
           muted: "#6B7280",
-          success: "#10B981",
+          success: "#22C55E",
           warning: "#F59E0B",
-          danger: "#EF4444"
+          danger: "#EF4444",
+          sidebar: "#0F172A",
         }
       },
       borderRadius: {
         card: "20px"
       },
       boxShadow: {
-        card: "0 10px 30px rgba(148, 163, 184, 0.16)"
+        card: "0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04)"
       },
       spacing: {
         sidebar: "240px",

@@ -20,19 +20,19 @@ body {
 
 @layer components {
   .fx2-card {
-    @apply rounded-card bg-fx2-card shadow-card p-5;
+    @apply rounded-card bg-white shadow-card p-5;
   }
 
   .fx2-title {
-    @apply text-base font-semibold text-fx2-text;
+    @apply text-xl font-semibold text-[#111827];
   }
 
   .fx2-value {
-    @apply text-2xl font-bold tracking-tight text-fx2-text;
+    @apply text-3xl font-bold tracking-tight text-[#111827];
   }
 
   .fx2-muted {
-    @apply text-sm text-fx2-muted;
+    @apply text-xs text-[#6B7280];
   }
 
   .status-pill {

@@ -40,12 +40,12 @@ export default function LineChartCard({
         label: title,
         data: safeValues,
         borderColor: color,
-        backgroundColor: `${color}55`,
-        borderWidth: 2.4,
-        pointRadius: 2,
-        pointHitRadius: 8,
-        pointHoverRadius: 12,
-        pointHoverBackgroundColor: "#FACC15",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHitRadius: 12,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: color,
         pointHoverBorderColor: "#FFFFFF",
         pointHoverBorderWidth: 2,
         fill: false,
@@ -59,7 +59,7 @@ export default function LineChartCard({
     maintainAspectRatio: false,
     animations: {
       radius: {
-        duration: 400,
+        duration: 300,
         easing: "linear",
         loop: (context) => context.active,
       },
@@ -80,14 +80,13 @@ export default function LineChartCard({
     scales: {
       x: {
         border: {
-          display: true,
-          color: "rgba(148, 163, 184, 0.24)",
+          display: false,
         },
         grid: {
           display: true,
           drawOnChartArea: true,
           drawTicks: false,
-          color: "rgba(148, 163, 184, 0.12)",
+          color: "#F1F5F9",
         },
         ticks: {
           display: false,
@@ -98,12 +97,13 @@ export default function LineChartCard({
           display: false,
         },
         grid: {
-          color: "rgba(148, 163, 184, 0.14)",
+          color: "#F1F5F9",
           drawTicks: false,
         },
         ticks: {
-          color: "#64748B",
+          color: "#6B7280",
           padding: 10,
+          font: { size: 11 },
           callback: (value: string | number) => Number(value).toFixed(1),
         },
       },
@@ -111,23 +111,23 @@ export default function LineChartCard({
   };
 
   return (
-    <section className="fx2-card col-span-12 xl:col-span-6">
+    <section className="fx2-card">
       <header className="mb-5 flex items-start justify-between gap-3">
         <div>
           <h2 className="fx2-title">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-fx2-muted">{subtitle}</p>
+          <p className="mt-1 text-xs text-[#6B7280]">{subtitle}</p>
         </div>
-        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-fx2-muted">
+        <div className="flex-shrink-0 rounded-2xl bg-[#EAF0F8] px-4 py-2.5 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#6B7280]">
             Latest
           </p>
-          <p className="mt-1 text-xl font-semibold text-fx2-text">
+          <p className="mt-0.5 text-lg font-bold text-[#111827]">
             {latestValue.toFixed(2)}
           </p>
         </div>
       </header>
 
-      <div className="h-64 rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] p-3">
+      <div className="h-56 rounded-2xl bg-transparent p-1">
         <Line data={data} options={options} />
       </div>
     </section>

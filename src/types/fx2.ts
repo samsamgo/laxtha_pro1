@@ -1,7 +1,6 @@
 export type DeviceMode = "demo" | "bluetooth" | "uart";
 export type WearStatus = "worn" | "unstable" | "not_worn";
 export type SignalStatus = "good" | "normal" | "poor";
-export type SessionSource = "demo" | "remote";
 
 export interface Fx2IncomingMessage {
   mode: DeviceMode;

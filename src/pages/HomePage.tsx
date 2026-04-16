@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import type { DeviceMode } from "../types/fx2";
@@ -56,6 +57,25 @@ export default function HomePage() {
     startSession,
   } = useFx2RealtimeSession();
 
+  const [bleSupported, setBleSupported] = useState(true);
+  const [serialSupported, setSerialSupported] = useState(true);
+
+  useEffect(() => {
+    setBleSupported(typeof navigator !== "undefined" && "bluetooth" in navigator);
+    setSerialSupported(typeof navigator !== "undefined" && "serial" in navigator);
+  }, []);
+
+  const isUnsupported =
+    (selectedMode === "bluetooth" && !bleSupported) ||
+    (selectedMode === "uart" && !serialSupported);
+
+  const unsupportedMessage =
+    selectedMode === "bluetooth" && !bleSupported
+      ? "이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge를 사용해 주세요."
+      : selectedMode === "uart" && !serialSupported
+      ? "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge를 사용해 주세요."
+      : null;
+
   const handleStart = () => {
     startSession();
     navigate("/live");
@@ -87,6 +107,11 @@ export default function HomePage() {
           <div className="grid gap-3 sm:grid-cols-3">
             {modeCards.map((item) => {
               const active = item.key === selectedMode;
+              const cardUnsupported =
+                (item.key === "bluetooth" && !bleSupported) ||
+                (item.key === "uart" && !serialSupported);
+              const showWarning = active && cardUnsupported;
+
               return (
                 <button
                   key={item.key}
@@ -94,12 +119,21 @@ export default function HomePage() {
                   onClick={() => setSelectedMode(item.key)}
                   className={`rounded-2xl p-4 text-left transition-all duration-200 ${
                     active
-                      ? "bg-[#EFF6FF] shadow-md ring-2 ring-[#2563EB] ring-opacity-40"
+                      ? showWarning
+                        ? "bg-red-50 shadow-md ring-2 ring-red-300 ring-opacity-60"
+                        : "bg-[#EFF6FF] shadow-md ring-2 ring-[#2563EB] ring-opacity-40"
                       : "bg-[#EAF0F8] shadow-sm hover:shadow-md"
                   }`}
                 >
                   <p className="text-sm font-semibold text-[#111827]">{item.title}</p>
                   <p className="mt-2 text-xs leading-5 text-[#6B7280]">{item.body}</p>
+                  {showWarning && (
+                    <p className="mt-2 text-xs leading-5 text-red-600">
+                      {item.key === "bluetooth"
+                        ? "이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge를 사용해 주세요."
+                        : "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge를 사용해 주세요."}
+                    </p>
+                  )}
                 </button>
               );
             })}
@@ -124,11 +158,19 @@ export default function HomePage() {
           {hardwareDetail ? (
             <p className="mt-2 text-xs leading-5 text-[#6B7280]">{hardwareDetail}</p>
           ) : null}
+          {unsupportedMessage ? (
+            <p className="mt-2 text-xs leading-5 text-red-600">{unsupportedMessage}</p>
+          ) : null}
         </div>
 
         <button
           onClick={handleStart}
-          className="mt-8 inline-flex items-center rounded-2xl bg-[#2563EB] px-6 py-3 text-sm font-semibold text-white shadow-md transition-opacity duration-200 hover:opacity-90"
+          disabled={isUnsupported}
+          className={`mt-8 inline-flex items-center rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-opacity duration-200 ${
+            isUnsupported
+              ? "cursor-not-allowed bg-gray-400 opacity-50"
+              : "bg-[#2563EB] hover:opacity-90"
+          }`}
         >
           실시간 측정 시작
         </button>

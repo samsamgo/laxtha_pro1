@@ -3,6 +3,7 @@ import HiddenDemoPanel from "../components/HiddenDemoPanel";
 import LineChartCard from "../components/LineChartCard";
 import StatusCard from "../components/StatusCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
+import type { Fx2HardwareStatus } from "../services/fx2Hardware";
 
 const formatDuration = (seconds: number) => {
   const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
@@ -23,14 +24,24 @@ const signalLabel = {
   poor: "나쁨",
 } as const;
 
-const hardwareLabelMap = {
-  idle: "장치 대기",
-  requesting: "권한 요청",
-  connecting: "장치 연결 중",
-  connected: "장치 연결됨",
-  unsupported: "브라우저 미지원",
-  error: "장치 오류",
-} as const;
+const hwStatusConfig: Record<Fx2HardwareStatus, { dot: string; label: string }> = {
+  connected:   { dot: "bg-green-500",               label: "연결됨"    },
+  connecting:  { dot: "bg-yellow-400 animate-pulse", label: "연결 중..." },
+  requesting:  { dot: "bg-yellow-400 animate-pulse", label: "연결 중..." },
+  idle:        { dot: "bg-gray-400",                 label: "대기 중"   },
+  error:       { dot: "bg-red-500",                  label: "연결 오류" },
+  unsupported: { dot: "bg-red-500",                  label: "미지원"    },
+};
+
+function HardwareStatusDot({ status }: { status: Fx2HardwareStatus }) {
+  const { dot, label } = hwStatusConfig[status];
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
+      <span className="text-xs font-semibold text-[#111827]">{label}</span>
+    </span>
+  );
+}
 
 export default function LivePage() {
   const {
@@ -92,17 +103,26 @@ export default function LivePage() {
 
         {/* ── Row 2: EEG Charts (side by side, full width together) ── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <LineChartCard
-            title="좌측 EEG (CH1)"
-            subtitle="실시간 입력에 반응하는 좌측 채널 파형"
-            values={state.ch1}
-            color="#06B6D4"
-          />
+          <div className="relative">
+            {selectedMode === "uart" && (
+              <span className="absolute right-3 top-3 z-10 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                바이너리 모드 · 0–255
+              </span>
+            )}
+            <LineChartCard
+              title="좌측 EEG (CH1)"
+              subtitle="실시간 입력에 반응하는 좌측 채널 파형"
+              values={state.ch1}
+              color="#06B6D4"
+              mode={selectedMode}
+            />
+          </div>
           <LineChartCard
             title="우측 EEG (CH2)"
             subtitle="실시간 입력에 반응하는 우측 채널 파형"
             values={state.ch2}
             color="#2563EB"
+            mode={selectedMode}
           />
         </div>
 
@@ -122,7 +142,7 @@ export default function LivePage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-[#6B7280]">하드웨어</span>
-                <span className="text-xs font-semibold text-[#111827]">{hardwareLabelMap[hardwareStatus]}</span>
+                <HardwareStatusDot status={hardwareStatus} />
               </div>
             </div>
             <div className="mt-5 grid gap-2">

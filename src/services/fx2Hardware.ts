@@ -23,9 +23,18 @@ interface UartConnectOptions {
   baudRate?: number;
 }
 
-const DEFAULT_BLE_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
-const DEFAULT_BLE_CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+const DEFAULT_BLE_SERVICE_UUID = "12345678-1234-1234-1234-123456789abc";
+const DEFAULT_BLE_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-123456789abd";
 const DEFAULT_UART_BAUD_RATE = 115200;
+const DEFAULT_UART_FILTERS: SerialPortFilter[] = [
+  {
+    usbVendorId: 0x0f1f,
+    usbProductId: 0x4e21,
+  },
+];
+
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_DELAY_MS = 2000;
 
 export const DEFAULT_HARDWARE_OPTIONS = {
   bluetooth: {
@@ -34,6 +43,7 @@ export const DEFAULT_HARDWARE_OPTIONS = {
   },
   uart: {
     baudRate: DEFAULT_UART_BAUD_RATE,
+    filters: DEFAULT_UART_FILTERS,
   },
 } as const;
 
@@ -58,6 +68,28 @@ export class Fx2HardwareService {
 
   private serialBuffer = "";
 
+  private isIntentionalDisconnect = false;
+
+  private reconnectTimeoutId: number | null = null;
+
+  private lastBleServiceUuid: BluetoothServiceUUID = DEFAULT_BLE_SERVICE_UUID;
+
+  private lastBleCharacteristicUuid: BluetoothCharacteristicUUID =
+    DEFAULT_BLE_CHARACTERISTIC_UUID;
+
+  private lastUartBaudRate = DEFAULT_UART_BAUD_RATE;
+
+  private uartFilters: SerialPortFilter[] = DEFAULT_UART_FILTERS;
+
+  private uartReconnectEnabled = false;
+
+  constructor() {
+    if (typeof navigator !== "undefined" && navigator.serial) {
+      navigator.serial.addEventListener("connect", this.handleSerialConnect);
+      navigator.serial.addEventListener("disconnect", this.handleSerialDisconnect);
+    }
+  }
+
   subscribe(callback: (event: Fx2HardwareEvent) => void) {
     this.listeners.add(callback);
     callback({ type: "status", status: this.status, detail: this.detail });
@@ -75,16 +107,20 @@ export class Fx2HardwareService {
     await this.disconnect();
 
     if (typeof navigator === "undefined" || !("bluetooth" in navigator)) {
-      this.setStatus("unsupported", "이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+      this.setStatus("unsupported", "This browser does not support Web Bluetooth.");
       return false;
     }
 
     try {
-      this.setStatus("requesting", "Bluetooth 장치를 선택해 주세요.");
+      this.setStatus("requesting", "Select a Bluetooth device.");
 
       const serviceUuid = options.serviceUuid ?? DEFAULT_BLE_SERVICE_UUID;
       const characteristicUuid =
         options.characteristicUuid ?? DEFAULT_BLE_CHARACTERISTIC_UUID;
+
+      this.lastBleServiceUuid = serviceUuid;
+      this.lastBleCharacteristicUuid = characteristicUuid;
+      this.isIntentionalDisconnect = false;
 
       const device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
@@ -92,10 +128,7 @@ export class Fx2HardwareService {
       });
 
       this.bleDevice = device;
-      this.setStatus(
-        "connecting",
-        `${device.name ?? "이름 없는 장치"} 연결 중`
-      );
+      this.setStatus("connecting", `${device.name ?? "Bluetooth device"} connecting`);
 
       device.addEventListener(
         "gattserverdisconnected",
@@ -105,7 +138,7 @@ export class Fx2HardwareService {
       const server = await device.gatt?.connect();
 
       if (!server) {
-        throw new Error("GATT 서버 연결에 실패했습니다.");
+        throw new Error("Failed to connect to the GATT server.");
       }
 
       const service = await server.getPrimaryService(serviceUuid);
@@ -119,14 +152,11 @@ export class Fx2HardwareService {
 
       await characteristic.startNotifications();
 
-      this.setStatus(
-        "connected",
-        `${device.name ?? "Bluetooth 장치"} 수신 중`
-      );
+      this.setStatus("connected", `${device.name ?? "Bluetooth device"} streaming`);
       return true;
     } catch (error) {
       const detail =
-        error instanceof Error ? error.message : "Bluetooth 연결에 실패했습니다.";
+        error instanceof Error ? error.message : "Bluetooth connection failed.";
       this.setStatus("error", detail);
       return false;
     }
@@ -136,33 +166,39 @@ export class Fx2HardwareService {
     await this.disconnect();
 
     if (typeof navigator === "undefined" || !("serial" in navigator)) {
-      this.setStatus("unsupported", "이 브라우저는 Web Serial을 지원하지 않습니다.");
+      this.setStatus("unsupported", "This browser does not support Web Serial.");
       return false;
     }
 
     try {
-      this.setStatus("requesting", "UART 포트를 선택해 주세요.");
+      this.setStatus("requesting", "Select a UART port.");
 
-      const port = await navigator.serial!.requestPort();
       const baudRate = options.baudRate ?? DEFAULT_UART_BAUD_RATE;
+      this.lastUartBaudRate = baudRate;
+      this.uartReconnectEnabled = true;
 
-      this.setStatus("connecting", `UART ${baudRate}bps 연결 중`);
-      await port.open({ baudRate });
-      this.serialPort = port;
-      this.serialAbort = false;
-      void this.readSerialLoop();
+      const port = await this.resolveUartPort();
+      await this.openSerialPort(port, baudRate);
 
-      this.setStatus("connected", `UART ${baudRate}bps 수신 중`);
+      this.setStatus("connected", `UART ${baudRate}bps streaming`);
       return true;
     } catch (error) {
+      this.uartReconnectEnabled = false;
       const detail =
-        error instanceof Error ? error.message : "UART 연결에 실패했습니다.";
+        error instanceof Error ? error.message : "UART connection failed.";
       this.setStatus("error", detail);
       return false;
     }
   }
 
   async disconnect() {
+    this.isIntentionalDisconnect = true;
+
+    if (this.reconnectTimeoutId !== null) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = null;
+    }
+
     if (this.bleCharacteristic) {
       this.bleCharacteristic.removeEventListener(
         "characteristicvaluechanged",
@@ -207,6 +243,8 @@ export class Fx2HardwareService {
 
     this.bleBuffer = "";
     this.serialBuffer = "";
+    this.uartReconnectEnabled = false;
+    this.isIntentionalDisconnect = false;
     this.setStatus("idle");
   }
 
@@ -218,6 +256,47 @@ export class Fx2HardwareService {
 
   private emit(event: Fx2HardwareEvent) {
     this.listeners.forEach((listener) => listener(event));
+  }
+
+  private matchesUartFilter(port: SerialPort) {
+    const info = port.getInfo();
+
+    return this.uartFilters.some((filter) => {
+      const vendorMatches =
+        filter.usbVendorId === undefined || info.usbVendorId === filter.usbVendorId;
+      const productMatches =
+        filter.usbProductId === undefined ||
+        info.usbProductId === filter.usbProductId;
+
+      return vendorMatches && productMatches;
+    });
+  }
+
+  private async getGrantedTargetPorts() {
+    if (!navigator.serial) {
+      return [];
+    }
+
+    const ports = await navigator.serial.getPorts();
+    return ports.filter((port) => this.matchesUartFilter(port));
+  }
+
+  private async resolveUartPort() {
+    const grantedPorts = await this.getGrantedTargetPorts();
+
+    if (grantedPorts.length > 0) {
+      return grantedPorts[0];
+    }
+
+    return navigator.serial!.requestPort({ filters: this.uartFilters });
+  }
+
+  private async openSerialPort(port: SerialPort, baudRate: number) {
+    this.setStatus("connecting", `UART ${baudRate}bps connecting`);
+    await port.open({ baudRate, dataBits: 8, stopBits: 1, parity: "none" });
+    this.serialPort = port;
+    this.serialAbort = false;
+    void this.readSerialLoop();
   }
 
   private flushBuffer(mode: Fx2HardwareMode, chunk: string) {
@@ -241,8 +320,85 @@ export class Fx2HardwareService {
   }
 
   private handleBluetoothDisconnect = () => {
-    this.setStatus("idle", "Bluetooth 연결이 종료되었습니다.");
+    if (this.isIntentionalDisconnect) {
+      this.setStatus("idle", "Bluetooth disconnected.");
+      return;
+    }
+
+    this.bleDevice?.removeEventListener(
+      "gattserverdisconnected",
+      this.handleBluetoothDisconnect
+    );
+
+    this.scheduleReconnect(1);
   };
+
+  private scheduleReconnect(attempt: number): void {
+    if (attempt > MAX_RECONNECT_ATTEMPTS) {
+      this.setStatus("error", "Reconnect failed. Check the device.");
+      return;
+    }
+
+    this.setStatus("connecting", `Reconnect attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
+
+    this.reconnectTimeoutId = window.setTimeout(() => {
+      void this.attemptReconnect(attempt);
+    }, RECONNECT_DELAY_MS);
+  }
+
+  private async attemptReconnect(attempt: number): Promise<void> {
+    this.reconnectTimeoutId = null;
+
+    if (this.isIntentionalDisconnect || !this.bleDevice) {
+      return;
+    }
+
+    if (this.bleCharacteristic) {
+      this.bleCharacteristic.removeEventListener(
+        "characteristicvaluechanged",
+        this.handleBluetoothNotification as EventListener
+      );
+      this.bleCharacteristic = null;
+    }
+
+    try {
+      const server = await this.bleDevice.gatt?.connect();
+
+      if (this.isIntentionalDisconnect) {
+        return;
+      }
+
+      if (!server) {
+        throw new Error("GATT reconnect failed.");
+      }
+
+      const service = await server.getPrimaryService(this.lastBleServiceUuid);
+      const characteristic = await service.getCharacteristic(
+        this.lastBleCharacteristicUuid
+      );
+      this.bleCharacteristic = characteristic;
+
+      characteristic.addEventListener(
+        "characteristicvaluechanged",
+        this.handleBluetoothNotification as EventListener
+      );
+
+      await characteristic.startNotifications();
+      this.bleBuffer = "";
+
+      this.bleDevice.addEventListener(
+        "gattserverdisconnected",
+        this.handleBluetoothDisconnect
+      );
+
+      this.setStatus(
+        "connected",
+        `${this.bleDevice.name ?? "Bluetooth device"} reconnected`
+      );
+    } catch {
+      this.scheduleReconnect(attempt + 1);
+    }
+  }
 
   private handleBluetoothNotification = (event: Event) => {
     const target = event.target as BluetoothRemoteGATTCharacteristic | null;
@@ -256,13 +412,46 @@ export class Fx2HardwareService {
     this.flushBuffer("bluetooth", chunk);
   };
 
+  private handleSerialConnect = () => {
+    if (!this.uartReconnectEnabled || this.serialPort || this.isIntentionalDisconnect) {
+      return;
+    }
+
+    void this.tryReconnectUart();
+  };
+
+  private handleSerialDisconnect = () => {
+    if (!this.serialPort) {
+      return;
+    }
+
+    this.serialAbort = true;
+    this.serialPort = null;
+    this.setStatus("idle", "UART disconnected.");
+  };
+
+  private async tryReconnectUart() {
+    try {
+      const grantedPorts = await this.getGrantedTargetPorts();
+      const port = grantedPorts[0];
+
+      if (!port || this.serialPort || this.isIntentionalDisconnect) {
+        return;
+      }
+
+      await this.openSerialPort(port, this.lastUartBaudRate);
+      this.setStatus("connected", `UART ${this.lastUartBaudRate}bps streaming`);
+    } catch {
+      // Ignore transient failures and wait for the next connect event.
+    }
+  }
+
   private async readSerialLoop() {
     if (!this.serialPort?.readable) {
       return;
     }
 
     this.serialReader = this.serialPort.readable.getReader();
-    const decoder = new TextDecoder();
 
     try {
       while (!this.serialAbort) {
@@ -272,17 +461,21 @@ export class Fx2HardwareService {
           break;
         }
 
-        this.flushBuffer("uart", decoder.decode(result.value, { stream: true }));
+        for (const byteValue of result.value) {
+          this.emit({ type: "packet", mode: "uart", raw: String(byteValue) });
+        }
       }
     } catch (error) {
       const detail =
-        error instanceof Error ? error.message : "UART 수신 루프가 종료되었습니다.";
+        error instanceof Error ? error.message : "UART read loop stopped.";
       this.setStatus("error", detail);
     } finally {
       if (this.serialReader) {
         this.serialReader.releaseLock();
         this.serialReader = null;
       }
+
+      this.serialPort = null;
     }
   }
 }

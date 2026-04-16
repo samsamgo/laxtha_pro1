@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import type { DeviceMode } from "../types/fx2";
 
 ChartJS.register(
   CategoryScale,
@@ -22,6 +23,7 @@ interface LineChartCardProps {
   values: number[];
   color: string;
   subtitle: string;
+  mode?: DeviceMode;
 }
 
 export default function LineChartCard({
@@ -29,7 +31,9 @@ export default function LineChartCard({
   values,
   color,
   subtitle,
+  mode,
 }: LineChartCardProps) {
+  const isUart = mode === "uart";
   const safeValues = values.length > 0 ? values : [0];
   const latestValue = safeValues[safeValues.length - 1] ?? 0;
 
@@ -44,12 +48,13 @@ export default function LineChartCard({
         borderWidth: 2,
         pointRadius: 0,
         pointHitRadius: 12,
-        pointHoverRadius: 4,
+        pointHoverRadius: isUart ? 0 : 4,
         pointHoverBackgroundColor: color,
         pointHoverBorderColor: "#FFFFFF",
         pointHoverBorderWidth: 2,
         fill: false,
-        tension: 0.4,
+        tension: isUart ? 0 : 0.4,
+        stepped: isUart ? ("before" as const) : (false as const),
       },
     ],
   };
@@ -93,6 +98,8 @@ export default function LineChartCard({
         },
       },
       y: {
+        min: isUart ? 0 : undefined,
+        max: isUart ? 255 : undefined,
         border: {
           display: false,
         },
@@ -104,7 +111,16 @@ export default function LineChartCard({
           color: "#6B7280",
           padding: 10,
           font: { size: 11 },
-          callback: (value: string | number) => Number(value).toFixed(1),
+          stepSize: isUart ? 32 : undefined,
+          callback: isUart
+            ? (value: string | number) => String(Math.round(Number(value)))
+            : (value: string | number) => Number(value).toFixed(1),
+        },
+        title: {
+          display: isUart,
+          text: "Byte Value (0–255)",
+          color: "#6B7280",
+          font: { size: 10 },
         },
       },
     },

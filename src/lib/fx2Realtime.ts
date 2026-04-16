@@ -171,6 +171,24 @@ export const parseHardwarePayload = (
     return null;
   }
 
+  // Binary byte mode: uart packets emitted as single integer strings (0-255)
+  if (mode === "uart") {
+    const byteValue = parseInt(trimmed, 10);
+    if (Number.isInteger(byteValue) && byteValue >= 0 && byteValue <= 255) {
+      return {
+        mode: "uart",
+        ch1: byteValue,
+        ch2: byteValue,
+        bpm: fallbackState.heartRate ?? 72,
+        wearing: true,
+        signalQuality: 88,
+        connection: "connected",
+        noise: false,
+        timestamp: Date.now(),
+      };
+    }
+  }
+
   const fallbackMessage = buildMessageFromState(fallbackState, {
     mode,
   });
@@ -207,6 +225,38 @@ export const parseHardwarePayload = (
     return null;
   }
 
+  // Map wear string → wearing + noise (FX2-Demo packet format)
+  let wearing: boolean;
+  let noise: boolean;
+  if (typeof candidate.wear === "string") {
+    wearing = candidate.wear !== "not_worn";
+    noise = candidate.wear === "unstable";
+  } else {
+    wearing = toBoolean(candidate.wearing, fallbackMessage.wearing);
+    noise = toBoolean(candidate.noise, fallbackMessage.noise);
+  }
+
+  // Map signal string → signalQuality (FX2-Demo packet format)
+  let signalQuality: number;
+  if (typeof candidate.signal === "string") {
+    const sigMap: Record<string, number> = { good: 88, normal: 62, poor: 28 };
+    signalQuality = sigMap[candidate.signal] ?? fallbackMessage.signalQuality;
+  } else {
+    signalQuality = clampNumber(
+      Math.round(toNumber(candidate.signalQuality, fallbackMessage.signalQuality)),
+      0,
+      100
+    );
+  }
+
+  // Map ts (Unix seconds) or timestamp (Unix ms) → ms
+  let timestamp: number;
+  if (typeof candidate.ts === "number" && candidate.ts > 0) {
+    timestamp = candidate.ts * 1000;
+  } else {
+    timestamp = Math.round(toNumber(candidate.timestamp, Date.now()));
+  }
+
   return {
     mode:
       candidate.mode === "demo" ||
@@ -217,15 +267,11 @@ export const parseHardwarePayload = (
     ch1: clampNumber(toNumber(candidate.ch1, fallbackMessage.ch1), -120, 120),
     ch2: clampNumber(toNumber(candidate.ch2, fallbackMessage.ch2), -120, 120),
     bpm: clampNumber(Math.round(toNumber(candidate.bpm, fallbackMessage.bpm)), 30, 220),
-    wearing: toBoolean(candidate.wearing, fallbackMessage.wearing),
-    signalQuality: clampNumber(
-      Math.round(toNumber(candidate.signalQuality, fallbackMessage.signalQuality)),
-      0,
-      100
-    ),
-    connection: toConnection(candidate.connection, fallbackMessage.connection),
-    noise: toBoolean(candidate.noise, fallbackMessage.noise),
-    timestamp: Math.round(toNumber(candidate.timestamp, Date.now())),
+    wearing,
+    signalQuality,
+    connection: toConnection(candidate.connection, "connected"),
+    noise,
+    timestamp,
   };
 };
 

@@ -36,8 +36,18 @@ interface Bluetooth {
   requestDevice(options: BluetoothDeviceRequestOptions): Promise<BluetoothDevice>;
 }
 
+interface SerialPortFilter {
+  usbVendorId?: number;
+  usbProductId?: number;
+}
+
+interface SerialPortInfo {
+  usbVendorId?: number;
+  usbProductId?: number;
+}
+
 interface SerialPortRequestOptions {
-  filters?: Array<Record<string, unknown>>;
+  filters?: SerialPortFilter[];
 }
 
 interface SerialOptions {
@@ -52,11 +62,21 @@ interface SerialOptions {
 interface SerialPort {
   readable: ReadableStream<Uint8Array> | null;
   writable: WritableStream<Uint8Array> | null;
+  getInfo(): SerialPortInfo;
   open(options: SerialOptions): Promise<void>;
   close(): Promise<void>;
 }
 
 interface Serial {
+  addEventListener(
+    type: "connect" | "disconnect",
+    listener: (event: Event) => void
+  ): void;
+  removeEventListener(
+    type: "connect" | "disconnect",
+    listener: (event: Event) => void
+  ): void;
+  getPorts(): Promise<SerialPort[]>;
   requestPort(options?: SerialPortRequestOptions): Promise<SerialPort>;
 }
 

@@ -1,0 +1,9 @@
+[bridge] listening on 0.0.0.0:8080/fx2
+[bridge] serving static build from C:\Users\dmast\Desktop\program\laxtha\laxtha_pro1\dist
+[bridge] client URL: ws://localhost:8080/fx2
+[bridge] client URL: ws://127.0.0.1:8080/fx2
+[bridge] client URL: ws://192.168.219.141:8080/fx2
+[bridge] press Ctrl+C to stop
+[bridge] connected 127.0.0.1:52901
+[bridge] relayed payload to 1 client(s)
+[bridge] disconnected 127.0.0.1:52901

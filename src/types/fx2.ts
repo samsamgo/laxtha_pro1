@@ -35,6 +35,7 @@ export interface Fx2State {
   noise: boolean;
   ch1: number[];
   ch2: number[];
+  timestamps: number[];
   ppg: number[];
   heartRateHistory: number[];
   signalQualityHistory: number[];

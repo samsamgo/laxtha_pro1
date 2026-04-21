@@ -1,38 +1,51 @@
-import type { DeviceMode, Fx2IncomingMessage, Fx2SessionStats, Fx2State, SignalStatus, WearStatus } from "../types/fx2";
+import type {
+  DeviceMode,
+  Fx2IncomingMessage,
+  Fx2SessionStats,
+  Fx2State,
+  SignalStatus,
+  WearStatus,
+} from "../types/fx2";
 
-const WAVE_HISTORY_LIMIT = 72;
+export const MAX_CHART_POINTS = 3000;
+
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
-const WAVE_SEGMENT_SIZE = 4;
+const INITIAL_WAVE_POINTS = 36;
+const INITIAL_TIMESTAMP_STEP_MS = 1000;
 
 const seedWave = (phase: number, amplitude = 1) =>
-  Array.from({ length: 36 }, (_, index) => Math.sin((index + phase) / 3) * amplitude + (Math.random() - 0.5) * 0.16);
+  Array.from({ length: INITIAL_WAVE_POINTS }, (_, index) => {
+    const noise = (Math.random() - 0.5) * 0.16;
+    return Math.sin((index + phase) / 3) * amplitude + noise;
+  });
 
-const clampArray = <T,>(values: T[], max: number) => values.slice(Math.max(values.length - max, 0));
+const createSeededTimestamps = (length: number) => {
+  const endTime = Date.now();
+
+  return Array.from({ length }, (_, index) => {
+    const offset = length - 1 - index;
+    return endTime - offset * INITIAL_TIMESTAMP_STEP_MS;
+  });
+};
+
+const clampArray = <T,>(values: T[], max: number) =>
+  values.slice(Math.max(values.length - max, 0));
+
+const appendValue = <T,>(history: T[], value: T, max: number) =>
+  clampArray([...history, value], max);
 
 const roundToSingleDecimal = (value: number) => Math.round(value * 10) / 10;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-const interpolateWaveSegment = (
-  previousValue: number,
-  nextValue: number,
-  sampleCount = WAVE_SEGMENT_SIZE
-) =>
-  Array.from({ length: sampleCount }, (_, index) => {
-    const step = (index + 1) / sampleCount;
-    const drift = previousValue + (nextValue - previousValue) * step;
-    const shimmer = Math.sin((index + 1) * 1.35) * 0.08;
-    return roundToSingleDecimal(drift + shimmer);
-  });
+const normalizeTimestamp = (previousTimestamp: number | undefined, nextTimestamp: number) => {
+  if (previousTimestamp === undefined) {
+    return nextTimestamp;
+  }
 
-const appendWaveSegment = (history: number[], nextValue: number) => {
-  const previousValue = history[history.length - 1] ?? nextValue;
-  return clampArray(
-    [...history, ...interpolateWaveSegment(previousValue, nextValue)],
-    WAVE_HISTORY_LIMIT
-  );
+  return Math.max(nextTimestamp, previousTimestamp + 1);
 };
 
 const toBoolean = (value: unknown, fallback: boolean) => {
@@ -98,7 +111,7 @@ const createEmptyStats = (): Fx2SessionStats => ({
   averageSignalQuality: 0,
   connectionDrops: 0,
   unstableMoments: 0,
-  notWornMoments: 0
+  notWornMoments: 0,
 });
 
 export const toWearStatus = (wearing: boolean, noise: boolean): WearStatus => {
@@ -123,6 +136,10 @@ export const toSignalStatus = (quality: number): SignalStatus => {
 
 export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
   const startedAt = new Date().toISOString();
+  const ch1 = seedWave(2, 1.6);
+  const ch2 = seedWave(8, 1.35);
+  const ppg = seedWave(11, 0.9);
+  const timestamps = createSeededTimestamps(ch1.length);
 
   return {
     mode,
@@ -132,16 +149,17 @@ export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
     heartRate: 72,
     signalQuality: 88,
     noise: false,
-    ch1: seedWave(2, 1.6),
-    ch2: seedWave(8, 1.35),
-    ppg: seedWave(11, 0.9),
+    ch1,
+    ch2,
+    timestamps,
+    ppg,
     heartRateHistory: [72],
     signalQualityHistory: [88],
     sessionSeconds: 0,
     sessionStartedAt: startedAt,
     lastUpdated: startedAt,
-    logs: ["세션을 준비했습니다. 측정을 시작하면 실시간 데이터가 누적됩니다."],
-    stats: createEmptyStats()
+    logs: ["세션이 준비됐습니다. 측정을 시작하면 실시간 데이터가 누적됩니다."],
+    stats: createEmptyStats(),
   };
 };
 
@@ -157,7 +175,7 @@ export const buildMessageFromState = (
   signalQuality: patch.signalQuality ?? state.signalQuality,
   connection: patch.connection ?? (state.connected ? "connected" : "disconnected"),
   noise: patch.noise ?? state.noise,
-  timestamp: patch.timestamp ?? Date.now()
+  timestamp: patch.timestamp ?? Date.now(),
 });
 
 export const parseHardwarePayload = (
@@ -171,9 +189,9 @@ export const parseHardwarePayload = (
     return null;
   }
 
-  // Binary byte mode: uart packets emitted as single integer strings (0-255)
   if (mode === "uart") {
     const byteValue = parseInt(trimmed, 10);
+
     if (Number.isInteger(byteValue) && byteValue >= 0 && byteValue <= 255) {
       return {
         mode: "uart",
@@ -189,9 +207,7 @@ export const parseHardwarePayload = (
     }
   }
 
-  const fallbackMessage = buildMessageFromState(fallbackState, {
-    mode,
-  });
+  const fallbackMessage = buildMessageFromState(fallbackState, { mode });
 
   let candidate: Record<string, unknown> | null = null;
 
@@ -225,9 +241,9 @@ export const parseHardwarePayload = (
     return null;
   }
 
-  // Map wear string → wearing + noise (FX2-Demo packet format)
   let wearing: boolean;
   let noise: boolean;
+
   if (typeof candidate.wear === "string") {
     wearing = candidate.wear !== "not_worn";
     noise = candidate.wear === "unstable";
@@ -236,11 +252,16 @@ export const parseHardwarePayload = (
     noise = toBoolean(candidate.noise, fallbackMessage.noise);
   }
 
-  // Map signal string → signalQuality (FX2-Demo packet format)
   let signalQuality: number;
+
   if (typeof candidate.signal === "string") {
-    const sigMap: Record<string, number> = { good: 88, normal: 62, poor: 28 };
-    signalQuality = sigMap[candidate.signal] ?? fallbackMessage.signalQuality;
+    const signalMap: Record<string, number> = {
+      good: 88,
+      normal: 62,
+      poor: 28,
+    };
+
+    signalQuality = signalMap[candidate.signal] ?? fallbackMessage.signalQuality;
   } else {
     signalQuality = clampNumber(
       Math.round(toNumber(candidate.signalQuality, fallbackMessage.signalQuality)),
@@ -249,8 +270,8 @@ export const parseHardwarePayload = (
     );
   }
 
-  // Map ts (Unix seconds) or timestamp (Unix ms) → ms
   let timestamp: number;
+
   if (typeof candidate.ts === "number" && candidate.ts > 0) {
     timestamp = candidate.ts * 1000;
   } else {
@@ -264,8 +285,12 @@ export const parseHardwarePayload = (
       candidate.mode === "uart"
         ? candidate.mode
         : mode,
-    ch1: clampNumber(toNumber(candidate.ch1, fallbackMessage.ch1), -120, 120),
-    ch2: clampNumber(toNumber(candidate.ch2, fallbackMessage.ch2), -120, 120),
+    ch1: mode === "uart"
+      ? clampNumber(toNumber(candidate.ch1, fallbackMessage.ch1), 0, 255)
+      : clampNumber(toNumber(candidate.ch1, fallbackMessage.ch1), -120, 120),
+    ch2: mode === "uart"
+      ? clampNumber(toNumber(candidate.ch2, fallbackMessage.ch2), 0, 255)
+      : clampNumber(toNumber(candidate.ch2, fallbackMessage.ch2), -120, 120),
     bpm: clampNumber(Math.round(toNumber(candidate.bpm, fallbackMessage.bpm)), 30, 220),
     wearing,
     signalQuality,
@@ -282,7 +307,10 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
   const bpm = Math.max(58, Math.min(108, Math.round(baseline)));
   const wearing = sampleIndex % 29 !== 0;
   const noise = sampleIndex % 13 === 0 || !wearing;
-  const signalQuality = Math.max(18, Math.min(99, Math.round((noise ? 42 : 88) + (Math.random() - 0.5) * 10)));
+  const signalQuality = Math.max(
+    18,
+    Math.min(99, Math.round((noise ? 42 : 88) + (Math.random() - 0.5) * 10))
+  );
   const drift = sampleIndex / 4;
 
   return {
@@ -294,7 +322,7 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
     signalQuality,
     connection: "connected",
     noise,
-    timestamp
+    timestamp,
   };
 };
 
@@ -302,19 +330,23 @@ export const appendLog = (logs: string[], message: string) =>
   clampArray([...logs, message], LOG_HISTORY_LIMIT);
 
 export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State): Fx2State => {
+  const nextTimestamp = normalizeTimestamp(
+    prev.timestamps[prev.timestamps.length - 1],
+    message.timestamp
+  );
   const wearStatus = toWearStatus(message.wearing, message.noise);
   const signalStatus = toSignalStatus(message.signalQuality);
-  const sessionStartedAt = prev.sessionStartedAt ?? new Date(message.timestamp).toISOString();
+  const sessionStartedAt = prev.sessionStartedAt ?? new Date(nextTimestamp).toISOString();
   const sessionStartedAtMs = Date.parse(sessionStartedAt);
   const nextSampleCount = prev.stats.sampleCount + 1;
   const averageHeartRate =
-    ((prev.stats.averageHeartRate * prev.stats.sampleCount) + message.bpm) / nextSampleCount;
+    (prev.stats.averageHeartRate * prev.stats.sampleCount + message.bpm) /
+    nextSampleCount;
   const averageSignalQuality =
-    ((prev.stats.averageSignalQuality * prev.stats.sampleCount) + message.signalQuality) / nextSampleCount;
+    (prev.stats.averageSignalQuality * prev.stats.sampleCount +
+      message.signalQuality) /
+    nextSampleCount;
   const ppgValue = message.bpm / 100 + (message.signalQuality - 60) / 500;
-  const nextCh1 = appendWaveSegment(prev.ch1, message.ch1);
-  const nextCh2 = appendWaveSegment(prev.ch2, message.ch2);
-  const nextPpg = appendWaveSegment(prev.ppg, ppgValue);
 
   return {
     ...prev,
@@ -325,34 +357,53 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     heartRate: message.bpm,
     signalQuality: message.signalQuality,
     noise: message.noise,
-    ch1: nextCh1,
-    ch2: nextCh2,
-    ppg: nextPpg,
-    heartRateHistory: clampArray([...prev.heartRateHistory, message.bpm], METRIC_HISTORY_LIMIT),
-    signalQualityHistory: clampArray([...prev.signalQualityHistory, message.signalQuality], METRIC_HISTORY_LIMIT),
-    sessionSeconds: Math.max(0, Math.floor((message.timestamp - sessionStartedAtMs) / 1000)),
+    ch1: appendValue(prev.ch1, message.ch1, MAX_CHART_POINTS),
+    ch2: appendValue(prev.ch2, message.ch2, MAX_CHART_POINTS),
+    timestamps: appendValue(prev.timestamps, nextTimestamp, MAX_CHART_POINTS),
+    ppg: appendValue(prev.ppg, ppgValue, MAX_CHART_POINTS),
+    heartRateHistory: appendValue(prev.heartRateHistory, message.bpm, METRIC_HISTORY_LIMIT),
+    signalQualityHistory: appendValue(
+      prev.signalQualityHistory,
+      message.signalQuality,
+      METRIC_HISTORY_LIMIT
+    ),
+    sessionSeconds: Math.max(
+      0,
+      Math.floor((nextTimestamp - sessionStartedAtMs) / 1000)
+    ),
     sessionStartedAt,
-    lastUpdated: new Date(message.timestamp).toISOString(),
+    lastUpdated: new Date(nextTimestamp).toISOString(),
     logs: appendLog(
       prev.logs,
-      `[${new Date(message.timestamp).toLocaleTimeString()}] ${message.mode.toUpperCase()} bpm=${message.bpm} / signal=${message.signalQuality}`
+      `[${new Date(nextTimestamp).toLocaleTimeString()}] ${message.mode.toUpperCase()} bpm=${message.bpm} / signal=${message.signalQuality}`
     ),
     stats: {
       sampleCount: nextSampleCount,
       averageHeartRate: roundToSingleDecimal(averageHeartRate),
-      minHeartRate: prev.stats.sampleCount === 0 ? message.bpm : Math.min(prev.stats.minHeartRate, message.bpm),
-      maxHeartRate: prev.stats.sampleCount === 0 ? message.bpm : Math.max(prev.stats.maxHeartRate, message.bpm),
+      minHeartRate:
+        prev.stats.sampleCount === 0
+          ? message.bpm
+          : Math.min(prev.stats.minHeartRate, message.bpm),
+      maxHeartRate:
+        prev.stats.sampleCount === 0
+          ? message.bpm
+          : Math.max(prev.stats.maxHeartRate, message.bpm),
       averageSignalQuality: roundToSingleDecimal(averageSignalQuality),
       connectionDrops:
-        prev.stats.connectionDrops + (prev.connected && message.connection !== "connected" ? 1 : 0),
-      unstableMoments: prev.stats.unstableMoments + (wearStatus === "unstable" ? 1 : 0),
-      notWornMoments: prev.stats.notWornMoments + (wearStatus === "not_worn" ? 1 : 0)
-    }
+        prev.stats.connectionDrops +
+        (prev.connected && message.connection !== "connected" ? 1 : 0),
+      unstableMoments:
+        prev.stats.unstableMoments + (wearStatus === "unstable" ? 1 : 0),
+      notWornMoments:
+        prev.stats.notWornMoments + (wearStatus === "not_worn" ? 1 : 0),
+    },
   };
 };
 
 const average = (values: number[]) =>
-  values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
+  values.length === 0
+    ? 0
+    : values.reduce((sum, value) => sum + value, 0) / values.length;
 
 export interface Fx2SummarySnapshot {
   averageHeartRate: number;
@@ -369,24 +420,43 @@ export interface Fx2SummarySnapshot {
 export const summarizeFx2State = (state: Fx2State): Fx2SummarySnapshot => {
   const leftChannelAverage = roundToSingleDecimal(average(state.ch1));
   const rightChannelAverage = roundToSingleDecimal(average(state.ch2));
-  const leftPeak = roundToSingleDecimal(Math.max(...state.ch1.map((value) => Math.abs(value)), 0));
-  const rightPeak = roundToSingleDecimal(Math.max(...state.ch2.map((value) => Math.abs(value)), 0));
-  const balanceGap = roundToSingleDecimal(Math.abs(leftChannelAverage - rightChannelAverage));
-  const stabilityPenalty = state.stats.connectionDrops * 10 + state.stats.unstableMoments * 2 + state.stats.notWornMoments * 3;
+  const leftPeak = roundToSingleDecimal(
+    Math.max(...state.ch1.map((value) => Math.abs(value)), 0)
+  );
+  const rightPeak = roundToSingleDecimal(
+    Math.max(...state.ch2.map((value) => Math.abs(value)), 0)
+  );
+  const balanceGap = roundToSingleDecimal(
+    Math.abs(leftChannelAverage - rightChannelAverage)
+  );
+  const stabilityPenalty =
+    state.stats.connectionDrops * 10 +
+    state.stats.unstableMoments * 2 +
+    state.stats.notWornMoments * 3;
   const stabilityScore = Math.max(
     0,
-    Math.min(100, Math.round(state.stats.averageSignalQuality - stabilityPenalty / Math.max(state.stats.sampleCount, 1) * 10 + 10))
+    Math.min(
+      100,
+      Math.round(
+        state.stats.averageSignalQuality -
+          (stabilityPenalty / Math.max(state.stats.sampleCount, 1)) * 10 +
+          10
+      )
+    )
   );
 
   let summaryText = "연결 직후라 아직 충분한 데이터가 쌓이지 않았습니다.";
 
   if (state.stats.sampleCount >= 3) {
     if (stabilityScore >= 85) {
-      summaryText = "착용과 연결 상태가 안정적으로 유지되어 시연용 흐름이 아주 좋습니다.";
+      summaryText =
+        "착용과 연결 상태가 안정적으로 유지되어 시연 흐름이 아주 좋습니다.";
     } else if (stabilityScore >= 65) {
-      summaryText = "전반적으로 안정적이지만, 중간중간 신호 품질 저하가 감지됩니다.";
+      summaryText =
+        "전반적으로는 안정적이지만 중간중간 신호 품질 저하가 감지됩니다.";
     } else {
-      summaryText = "착용 또는 연결 안정성이 낮아 보여서, 시연 전 상태 점검이 필요합니다.";
+      summaryText =
+        "착용 또는 연결 안정성이 낮아 보여서 시연 전 상태 점검이 필요합니다.";
     }
   }
 
@@ -399,6 +469,6 @@ export const summarizeFx2State = (state: Fx2State): Fx2SummarySnapshot => {
     rightPeak,
     balanceGap,
     stabilityScore,
-    summaryText
+    summaryText,
   };
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
+import EEGChartV2 from "../components/EEGChartV2";
 import HiddenDemoPanel from "../components/HiddenDemoPanel";
-import LineChartCard from "../components/LineChartCard";
 import StatusCard from "../components/StatusCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import type { Fx2HardwareStatus } from "../services/fx2Hardware";
@@ -57,6 +57,11 @@ export default function LivePage() {
     applyPreset,
   } = useFx2RealtimeSession();
   const [panelOpen, setPanelOpen] = useState(false);
+  const [windowSeconds, setWindowSeconds] = useState<10 | 30 | 60>(30);
+  const [paused, setPaused] = useState(false);
+  const [ch1Visible, setCh1Visible] = useState(true);
+  const [ch2Visible, setCh2Visible] = useState(true);
+  const [chartTheme, setChartTheme] = useState<"light" | "dark">("light");
 
   return (
     <>
@@ -101,30 +106,25 @@ export default function LivePage() {
           />
         </div>
 
-        {/* ── Row 2: EEG Charts (side by side, full width together) ── */}
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <div className="relative">
-            {selectedMode === "uart" && (
-              <span className="absolute right-3 top-3 z-10 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                바이너리 모드 · 0–255
-              </span>
-            )}
-            <LineChartCard
-              title="좌측 EEG (CH1)"
-              subtitle="실시간 입력에 반응하는 좌측 채널 파형"
-              values={state.ch1}
-              color="#06B6D4"
-              mode={selectedMode}
-            />
-          </div>
-          <LineChartCard
-            title="우측 EEG (CH2)"
-            subtitle="실시간 입력에 반응하는 우측 채널 파형"
-            values={state.ch2}
-            color="#2563EB"
-            mode={selectedMode}
-          />
-        </div>
+        {/* ── Row 2: Combined EEG Chart (full width) ── */}
+        <EEGChartV2
+          ch1={state.ch1}
+          ch2={state.ch2}
+          timestamps={state.timestamps}
+          mode={selectedMode}
+          windowSeconds={windowSeconds}
+          paused={paused}
+          ch1Visible={ch1Visible}
+          ch2Visible={ch2Visible}
+          theme={chartTheme}
+          onPauseToggle={() => setPaused((current) => !current)}
+          onWindowChange={setWindowSeconds}
+          onCh1Toggle={() => setCh1Visible((current) => !current)}
+          onCh2Toggle={() => setCh2Visible((current) => !current)}
+          onThemeToggle={() =>
+            setChartTheme((current) => (current === "light" ? "dark" : "light"))
+          }
+        />
 
         {/* ── Row 3: Connection + Device info + Session insights ── */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-12">

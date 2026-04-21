@@ -1,10 +1,25 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import { Fx2RealtimeProvider } from "./context/Fx2RealtimeContext";
 import { ThemeProvider } from "./context/ThemeContext";
-import HomePage from "./pages/HomePage";
-import LivePage from "./pages/LivePage";
-import SummaryPage from "./pages/SummaryPage";
+
+const HomePage = lazy(() => import("./pages/HomePage"));
+const LivePage = lazy(() => import("./pages/LivePage"));
+const SummaryPage = lazy(() => import("./pages/SummaryPage"));
+
+function RouteFallback() {
+  return (
+    <div className="fx2-card fx2-outline">
+      <p className="text-sm font-semibold text-[#111827] dark:text-white">
+        화면을 불러오는 중입니다.
+      </p>
+      <p className="mt-2 text-xs text-[#6B7280] dark:text-slate-400">
+        필요한 차트와 세션 정보를 준비하고 있습니다.
+      </p>
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -15,7 +30,9 @@ export default function App() {
             path="/"
             element={
               <Layout title="연결 시작 화면">
-                <HomePage />
+                <Suspense fallback={<RouteFallback />}>
+                  <HomePage />
+                </Suspense>
               </Layout>
             }
           />
@@ -23,7 +40,9 @@ export default function App() {
             path="/live"
             element={
               <Layout title="실시간 측정 대시보드">
-                <LivePage />
+                <Suspense fallback={<RouteFallback />}>
+                  <LivePage />
+                </Suspense>
               </Layout>
             }
           />
@@ -31,7 +50,9 @@ export default function App() {
             path="/summary"
             element={
               <Layout title="결과 요약 화면">
-                <SummaryPage />
+                <Suspense fallback={<RouteFallback />}>
+                  <SummaryPage />
+                </Suspense>
               </Layout>
             }
           />

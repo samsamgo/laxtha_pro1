@@ -30,6 +30,12 @@ const signalLabel = {
   poor: "부족",
 } as const;
 
+const chartPointLimitMap: Record<10 | 30 | 60, number> = {
+  10: 50,
+  30: 150,
+  60: 300,
+};
+
 function HeartIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
@@ -128,6 +134,22 @@ export default function LivePage() {
     () => state.logs.slice().reverse().slice(0, 10),
     [state.logs]
   );
+
+  const chartSeries = useMemo(() => {
+    const pointLimit = chartPointLimitMap[windowSeconds];
+    const pointCount = Math.min(
+      state.ch1.length,
+      state.ch2.length,
+      state.timestamps.length,
+      pointLimit
+    );
+
+    return {
+      ch1: state.ch1.slice(-pointCount),
+      ch2: state.ch2.slice(-pointCount),
+      timestamps: state.timestamps.slice(-pointCount),
+    };
+  }, [state.ch1, state.ch2, state.timestamps, windowSeconds]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -273,9 +295,9 @@ export default function LivePage() {
 
         <div className="w-full">
           <EEGChartV2
-            ch1={state.ch1}
-            ch2={state.ch2}
-            timestamps={state.timestamps}
+            ch1={chartSeries.ch1}
+            ch2={chartSeries.ch2}
+            timestamps={chartSeries.timestamps}
             mode={selectedMode}
             windowSeconds={windowSeconds}
             paused={paused}

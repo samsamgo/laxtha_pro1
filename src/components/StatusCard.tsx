@@ -18,20 +18,22 @@ export default function StatusCard({ title, value, hint, tone = "neutral" }: Sta
   const config = toneConfig[tone];
 
   return (
-    <div className="flex flex-col gap-3 rounded-card bg-white p-5 shadow-card">
+    <div className="flex flex-col gap-3 rounded-card bg-white p-5 shadow-card transition-colors duration-300 dark:bg-[#1E293B]">
       <div className="flex items-center gap-2">
         <span
           className={`h-2 w-2 flex-shrink-0 rounded-full transition-colors duration-300 ${config.dot}`}
         />
-        <span className="text-xs font-medium text-[#6B7280]">{title}</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-[#6B7280] dark:text-slate-400">
+          {title}
+        </span>
       </div>
 
-      <p className={`text-3xl font-bold tracking-tight ${config.value}`}>
+      <p className={`text-2xl font-bold tracking-tight dark:text-white ${config.value}`}>
         {value}
       </p>
 
       {hint ? (
-        <p className="text-xs text-[#6B7280]">{hint}</p>
+        <p className="text-xs text-[#6B7280] dark:text-slate-400">{hint}</p>
       ) : null}
     </div>
   );

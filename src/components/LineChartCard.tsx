@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { useFx2Theme } from "../context/ThemeContext";
 import type { DeviceMode } from "../types/fx2";
 
 ChartJS.register(
@@ -33,9 +34,13 @@ export default function LineChartCard({
   subtitle,
   mode,
 }: LineChartCardProps) {
+  const { darkMode } = useFx2Theme();
   const isUart = mode === "uart";
   const safeValues = values.length > 0 ? values : [0];
   const latestValue = safeValues[safeValues.length - 1] ?? 0;
+  const gridColor = darkMode ? "#334155" : "#F1F5F9";
+  const tickColor = darkMode ? "#94A3B8" : "#6B7280";
+  const pointHoverBorderColor = darkMode ? "#1E293B" : "#FFFFFF";
 
   const data = {
     labels: safeValues.map((_, index) => `${index + 1}`),
@@ -50,7 +55,7 @@ export default function LineChartCard({
         pointHitRadius: 12,
         pointHoverRadius: isUart ? 0 : 4,
         pointHoverBackgroundColor: color,
-        pointHoverBorderColor: "#FFFFFF",
+        pointHoverBorderColor,
         pointHoverBorderWidth: 2,
         fill: false,
         tension: isUart ? 0 : 0.4,
@@ -91,7 +96,7 @@ export default function LineChartCard({
           display: true,
           drawOnChartArea: true,
           drawTicks: false,
-          color: "#F1F5F9",
+          color: gridColor,
         },
         ticks: {
           display: false,
@@ -104,11 +109,11 @@ export default function LineChartCard({
           display: false,
         },
         grid: {
-          color: "#F1F5F9",
+          color: gridColor,
           drawTicks: false,
         },
         ticks: {
-          color: "#6B7280",
+          color: tickColor,
           padding: 10,
           font: { size: 11 },
           stepSize: isUart ? 32 : undefined,
@@ -118,8 +123,8 @@ export default function LineChartCard({
         },
         title: {
           display: isUart,
-          text: "Byte Value (0–255)",
-          color: "#6B7280",
+          text: "Byte Value (0-255)",
+          color: tickColor,
           font: { size: 10 },
         },
       },
@@ -127,17 +132,17 @@ export default function LineChartCard({
   };
 
   return (
-    <section className="fx2-card">
+    <section className="fx2-card fx2-outline">
       <header className="mb-5 flex items-start justify-between gap-3">
         <div>
           <h2 className="fx2-title">{title}</h2>
-          <p className="mt-1 text-xs text-[#6B7280]">{subtitle}</p>
+          <p className="mt-1 text-xs text-[#6B7280] dark:text-slate-400">{subtitle}</p>
         </div>
-        <div className="flex-shrink-0 rounded-2xl bg-[#EAF0F8] px-4 py-2.5 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#6B7280]">
+        <div className="fx2-surface rounded-2xl px-4 py-2.5 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#6B7280] dark:text-slate-400">
             Latest
           </p>
-          <p className="mt-0.5 text-lg font-bold text-[#111827]">
+          <p className="mt-0.5 text-lg font-bold text-[#111827] dark:text-white">
             {latestValue.toFixed(2)}
           </p>
         </div>

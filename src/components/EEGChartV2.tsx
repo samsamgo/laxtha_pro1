@@ -71,7 +71,7 @@ const uartAutoscaleInfoProvider = () => ({
 });
 
 const formatValue = (value: number | undefined) =>
-  value === undefined ? "—" : value.toFixed(2);
+  value === undefined ? "--" : value.toFixed(2);
 
 const formatChartTime = (time: Time) => {
   if (typeof time === "number") {
@@ -140,7 +140,6 @@ function EEGChartV2({
   const chartRef = useRef<IChartApi | null>(null);
   const ch1SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ch2SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const lastRenderedTimeRef = useRef<number | null>(null);
   const lastProcessedCountRef = useRef(0);
   const lastInputTimestampRef = useRef<number | null>(null);
@@ -151,6 +150,10 @@ function EEGChartV2({
   const isUart = mode === "uart";
   const latestCh1 = ch1[ch1.length - 1];
   const latestCh2 = ch2[ch2.length - 1];
+  const secondaryButtonClass =
+    theme === "dark"
+      ? "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+      : "bg-[#EAF0F8] text-[#6B7280] hover:bg-[#111827] hover:text-white";
 
   const syncLiveEdgeState = () => {
     const chart = chartRef.current;
@@ -200,14 +203,6 @@ function EEGChartV2({
     const chart = createChart(container, {
       width: container.clientWidth,
       height: container.clientHeight,
-      layout: {
-        background: { type: ColorType.Solid, color: "#FFFFFF" },
-        textColor: "#6B7280",
-      },
-      grid: {
-        vertLines: { color: "#F1F5F9" },
-        horzLines: { color: "#F1F5F9" },
-      },
       crosshair: {
         mode: CrosshairMode.Normal,
       },
@@ -227,6 +222,7 @@ function EEGChartV2({
       localization: {
         timeFormatter: formatChartTime,
       },
+      ...THEME_OPTIONS[theme],
     });
 
     const sharedSeriesOptions = {
@@ -237,18 +233,18 @@ function EEGChartV2({
       priceScaleId: "right" as const,
     };
 
-    const ch1Series = chart.addSeries(LineSeries, {
+    const nextCh1Series = chart.addSeries(LineSeries, {
       ...sharedSeriesOptions,
       color: "#06B6D4",
     });
-    const ch2Series = chart.addSeries(LineSeries, {
+    const nextCh2Series = chart.addSeries(LineSeries, {
       ...sharedSeriesOptions,
       color: "#2563EB",
     });
 
     chartRef.current = chart;
-    ch1SeriesRef.current = ch1Series;
-    ch2SeriesRef.current = ch2Series;
+    ch1SeriesRef.current = nextCh1Series;
+    ch2SeriesRef.current = nextCh2Series;
 
     const handleVisibleRangeChange = () => {
       syncLiveEdgeState();
@@ -264,11 +260,9 @@ function EEGChartV2({
     });
 
     resizeObserver.observe(container);
-    resizeObserverRef.current = resizeObserver;
 
     return () => {
       resizeObserver.disconnect();
-      resizeObserverRef.current = null;
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
       chart.remove();
       chartRef.current = null;
@@ -287,10 +281,10 @@ function EEGChartV2({
   }, [theme]);
 
   useEffect(() => {
-    const ch1Series = ch1SeriesRef.current;
-    const ch2Series = ch2SeriesRef.current;
+    const nextCh1Series = ch1SeriesRef.current;
+    const nextCh2Series = ch2SeriesRef.current;
 
-    if (!ch1Series || !ch2Series) {
+    if (!nextCh1Series || !nextCh2Series) {
       return;
     }
 
@@ -299,12 +293,12 @@ function EEGChartV2({
         autoScale: true,
         mode: PriceScaleMode.Normal,
       });
-      ch1Series.applyOptions({
+      nextCh1Series.applyOptions({
         lineType: LineType.WithSteps,
         priceFormat: { type: "price", precision: 0, minMove: 1 },
         autoscaleInfoProvider: uartAutoscaleInfoProvider,
       });
-      ch2Series.applyOptions({
+      nextCh2Series.applyOptions({
         lineType: LineType.WithSteps,
         priceFormat: { type: "price", precision: 0, minMove: 1 },
         autoscaleInfoProvider: uartAutoscaleInfoProvider,
@@ -312,12 +306,12 @@ function EEGChartV2({
       return;
     }
 
-    ch1Series.applyOptions({
+    nextCh1Series.applyOptions({
       lineType: LineType.Simple,
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       autoscaleInfoProvider: undefined,
     });
-    ch2Series.applyOptions({
+    nextCh2Series.applyOptions({
       lineType: LineType.Simple,
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       autoscaleInfoProvider: undefined,
@@ -341,10 +335,10 @@ function EEGChartV2({
       return;
     }
 
-    const ch1Series = ch1SeriesRef.current;
-    const ch2Series = ch2SeriesRef.current;
+    const nextCh1Series = ch1SeriesRef.current;
+    const nextCh2Series = ch2SeriesRef.current;
 
-    if (!ch1Series || !ch2Series || pendingPairsRef.current.length === 0) {
+    if (!nextCh1Series || !nextCh2Series || pendingPairsRef.current.length === 0) {
       if (atLiveEdgeRef.current) {
         snapToLive(true);
       }
@@ -352,8 +346,8 @@ function EEGChartV2({
     }
 
     pendingPairsRef.current.forEach((pair) => {
-      ch1Series.update(pair.ch1);
-      ch2Series.update(pair.ch2);
+      nextCh1Series.update(pair.ch1);
+      nextCh2Series.update(pair.ch2);
     });
 
     pendingPairsRef.current = [];
@@ -364,18 +358,18 @@ function EEGChartV2({
   }, [paused, windowSeconds]);
 
   useEffect(() => {
-    const ch1Series = ch1SeriesRef.current;
-    const ch2Series = ch2SeriesRef.current;
+    const nextCh1Series = ch1SeriesRef.current;
+    const nextCh2Series = ch2SeriesRef.current;
 
-    if (!ch1Series || !ch2Series) {
+    if (!nextCh1Series || !nextCh2Series) {
       return;
     }
 
     const pointCount = Math.min(ch1.length, ch2.length, timestamps.length);
 
     if (pointCount === 0) {
-      ch1Series.setData([]);
-      ch2Series.setData([]);
+      nextCh1Series.setData([]);
+      nextCh2Series.setData([]);
       pendingPairsRef.current = [];
       lastRenderedTimeRef.current = null;
       lastProcessedCountRef.current = 0;
@@ -400,15 +394,15 @@ function EEGChartV2({
     );
 
     if (needsFullReset) {
-      ch1Series.setData(nextPairs.map((pair) => pair.ch1));
-      ch2Series.setData(nextPairs.map((pair) => pair.ch2));
+      nextCh1Series.setData(nextPairs.map((pair) => pair.ch1));
+      nextCh2Series.setData(nextPairs.map((pair) => pair.ch2));
       pendingPairsRef.current = [];
     } else if (paused) {
       pendingPairsRef.current.push(...nextPairs);
     } else {
       nextPairs.forEach((pair) => {
-        ch1Series.update(pair.ch1);
-        ch2Series.update(pair.ch2);
+        nextCh1Series.update(pair.ch1);
+        nextCh2Series.update(pair.ch2);
       });
     }
 
@@ -422,87 +416,97 @@ function EEGChartV2({
   }, [ch1, ch2, paused, timestamps, windowSeconds]);
 
   return (
-    <section className="fx2-card w-full min-h-[400px] lg:min-h-[480px]">
-      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          {[10, 30, 60].map((seconds) => {
-            const value = seconds as WindowSeconds;
-            const isActive = windowSeconds === value;
+    <section className="fx2-card fx2-outline w-full min-h-[280px] sm:min-h-[360px] lg:min-h-[480px]">
+      <div className="mb-4 flex flex-col gap-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex flex-wrap items-center gap-2">
+              {[10, 30, 60].map((seconds) => {
+                const value = seconds as WindowSeconds;
+                const isActive = windowSeconds === value;
 
-            return (
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onWindowChange(value)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                      isActive
+                        ? "bg-[#2563EB] text-white"
+                        : ` ${secondaryButtonClass}`
+                    }`}
+                  >
+                    {value}s
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                key={value}
                 type="button"
-                onClick={() => onWindowChange(value)}
+                onClick={onPauseToggle}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${secondaryButtonClass}`}
+              >
+                {paused ? "재개" : "일시정지"}
+              </button>
+
+              <button
+                type="button"
+                onClick={onCh1Toggle}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
-                  isActive
-                    ? "bg-[#2563EB] text-white"
-                    : "bg-[#EAF0F8] text-[#6B7280] hover:bg-[#2563EB] hover:text-white"
+                  ch1Visible
+                    ? "bg-cyan-100 text-cyan-700"
+                    : theme === "dark"
+                    ? "bg-slate-800 text-slate-300 hover:bg-cyan-500/15 hover:text-cyan-300"
+                    : "bg-[#EAF0F8] text-[#6B7280] hover:bg-cyan-100 hover:text-cyan-700"
                 }`}
               >
-                {value}s
+                CH1
               </button>
-            );
-          })}
 
-          <button
-            type="button"
-            onClick={onPauseToggle}
-            className="rounded-full bg-[#EAF0F8] px-3 py-1.5 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white"
-          >
-            {paused ? "▶ 재개" : "⏸ 일시정지"}
-          </button>
+              <button
+                type="button"
+                onClick={onCh2Toggle}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                  ch2Visible
+                    ? "bg-blue-100 text-blue-700"
+                    : theme === "dark"
+                    ? "bg-slate-800 text-slate-300 hover:bg-blue-500/15 hover:text-blue-300"
+                    : "bg-[#EAF0F8] text-[#6B7280] hover:bg-blue-100 hover:text-blue-700"
+                }`}
+              >
+                CH2
+              </button>
 
-          <button
-            type="button"
-            onClick={onCh1Toggle}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
-              ch1Visible
-                ? "bg-cyan-100 text-cyan-700"
-                : "bg-[#EAF0F8] text-[#6B7280] hover:bg-cyan-100 hover:text-cyan-700"
-            }`}
-          >
-            CH1
-          </button>
+              <button
+                type="button"
+                onClick={onThemeToggle}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${secondaryButtonClass}`}
+              >
+                {theme === "dark" ? "라이트" : "다크"}
+              </button>
 
-          <button
-            type="button"
-            onClick={onCh2Toggle}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
-              ch2Visible
-                ? "bg-blue-100 text-blue-700"
-                : "bg-[#EAF0F8] text-[#6B7280] hover:bg-blue-100 hover:text-blue-700"
-            }`}
-          >
-            CH2
-          </button>
+              {isUart ? (
+                <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                  바이너리 모드 · 0-255
+                </span>
+              ) : null}
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={onThemeToggle}
-            className="rounded-full bg-[#EAF0F8] px-3 py-1.5 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white"
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
-
-          {isUart ? (
-            <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700">
-              바이너리 모드 · 0–255
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <span className="rounded-full bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">
+              CH1 {formatValue(latestCh1)}
             </span>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <span className="rounded-full bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-700">
-            CH1 {formatValue(latestCh1)}
-          </span>
-          <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700">
-            CH2 {formatValue(latestCh2)}
-          </span>
+            <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+              CH2 {formatValue(latestCh2)}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="relative h-[340px] min-h-[340px] w-full overflow-hidden rounded-2xl md:h-[400px] lg:h-[480px]">
+      <div className="relative h-[280px] min-h-[280px] w-full overflow-hidden rounded-2xl sm:h-[340px] md:h-[400px] lg:h-[480px]">
         {showLiveButton ? (
           <button
             type="button"

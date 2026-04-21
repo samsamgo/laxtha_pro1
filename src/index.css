@@ -8,10 +8,25 @@
   background-color: #F4F7FB;
 }
 
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   background-color: #F4F7FB;
   min-height: 100vh;
+  color: #111827;
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+html.dark body {
+  background-color: #020617;
+  color: #E2E8F0;
 }
 
 #root {
@@ -20,22 +35,30 @@ body {
 
 @layer components {
   .fx2-card {
-    @apply rounded-card bg-white shadow-card p-5;
+    @apply rounded-card bg-white p-5 shadow-card transition-colors duration-300 dark:bg-[#1E293B] dark:text-slate-100;
   }
 
   .fx2-title {
-    @apply text-xl font-semibold text-[#111827];
+    @apply text-xl font-semibold text-[#111827] dark:text-white;
   }
 
   .fx2-value {
-    @apply text-3xl font-bold tracking-tight text-[#111827];
+    @apply text-3xl font-bold tracking-tight text-[#111827] dark:text-white;
   }
 
   .fx2-muted {
-    @apply text-xs text-[#6B7280];
+    @apply text-xs text-[#6B7280] dark:text-slate-400;
   }
 
   .status-pill {
     @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .fx2-surface {
+    @apply bg-[#EAF0F8] dark:bg-slate-800;
+  }
+
+  .fx2-outline {
+    @apply border border-transparent dark:border-slate-700;
   }
 }

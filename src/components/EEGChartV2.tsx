@@ -422,7 +422,7 @@ function EEGChartV2({
   }, [ch1, ch2, paused, timestamps, windowSeconds]);
 
   return (
-    <section className="fx2-card w-full min-h-[400px]">
+    <section className="fx2-card w-full min-h-[400px] lg:min-h-[480px]">
       <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           {[10, 30, 60].map((seconds) => {
@@ -502,7 +502,7 @@ function EEGChartV2({
         </div>
       </div>
 
-      <div className="relative h-[340px] min-h-[340px] w-full overflow-hidden rounded-2xl md:h-[400px]">
+      <div className="relative h-[340px] min-h-[340px] w-full overflow-hidden rounded-2xl md:h-[400px] lg:h-[480px]">
         {showLiveButton ? (
           <button
             type="button"

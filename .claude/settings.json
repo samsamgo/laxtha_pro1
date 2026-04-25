@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /c/Users/dmast/Desktop/pro/laxtha_pro1 && npx tsc --noEmit 2>&1 | head -30 || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /c/Users/dmast/Desktop/pro/laxtha_pro1 && echo '=== Git 상태 ===' && git status -s && echo '' && echo '=== 최근 커밋 ===' && git log --oneline -3"
+          }
+        ]
+      }
+    ]
+  }
+}

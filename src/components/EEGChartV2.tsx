@@ -1,122 +1,250 @@
-import { memo, useEffect, useRef, useState } from "react";
-import {
-  type ChartOptions,
-  ColorType,
-  CrosshairMode,
-  LineSeries,
-  LineType,
-  PriceScaleMode,
-  createChart,
-  type DeepPartial,
-  type IChartApi,
-  type ISeriesApi,
-  type LineData,
-  type Time,
-  type UTCTimestamp,
-} from "lightweight-charts";
-
-type WindowSeconds = 10 | 30 | 60;
-type ChartTheme = "light" | "dark";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import uPlot from "uplot";
+import "uplot/dist/uPlot.min.css";
 
 export interface EEGChartV2Props {
   ch1: number[];
   ch2: number[];
-  timestamps: number[];
+  timestamps: number[]; // Unix ms
   mode: "demo" | "bluetooth" | "uart";
-  windowSeconds: WindowSeconds;
+  windowSeconds: 10 | 30 | 60;
   paused: boolean;
   ch1Visible: boolean;
   ch2Visible: boolean;
-  theme: ChartTheme;
+  theme: "light" | "dark";
   onPauseToggle: () => void;
-  onWindowChange: (seconds: WindowSeconds) => void;
+  onWindowChange: (seconds: 10 | 30 | 60) => void;
   onCh1Toggle?: () => void;
   onCh2Toggle?: () => void;
   onThemeToggle?: () => void;
 }
 
-interface PendingPair {
-  ch1: LineData<Time>;
-  ch2: LineData<Time>;
+type WindowSeconds = EEGChartV2Props["windowSeconds"];
+type ChartTheme = EEGChartV2Props["theme"];
+
+interface ChartDimensions {
+  width: number;
+  height: number;
 }
 
-const THEME_OPTIONS: Record<ChartTheme, DeepPartial<ChartOptions>> = {
+interface VisibleRange {
+  min: number;
+  max: number;
+}
+
+const CH1_COLOR = "#06B6D4";
+const CH2_COLOR = "#2563EB";
+
+const THEME_COLORS: Record<
+  ChartTheme,
+  { background: string; grid: string; text: string }
+> = {
   light: {
-    layout: {
-      background: { type: ColorType.Solid, color: "#FFFFFF" },
-      textColor: "#6B7280",
-    },
-    grid: {
-      vertLines: { color: "#F1F5F9" },
-      horzLines: { color: "#F1F5F9" },
-    },
+    background: "#FFFFFF",
+    grid: "#F1F5F9",
+    text: "#6B7280",
   },
   dark: {
-    layout: {
-      background: { type: ColorType.Solid, color: "#1E293B" },
-      textColor: "#94A3B8",
-    },
-    grid: {
-      vertLines: { color: "#334155" },
-      horzLines: { color: "#334155" },
-    },
+    background: "#1E293B",
+    grid: "#334155",
+    text: "#94A3B8",
   },
 };
 
-const uartAutoscaleInfoProvider = () => ({
-  priceRange: {
-    minValue: 0,
-    maxValue: 255,
-  },
-});
+const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
 const formatValue = (value: number | undefined) =>
   value === undefined ? "--" : value.toFixed(2);
 
-const formatChartTime = (time: Time) => {
-  if (typeof time === "number") {
-    return new Date(time * 1000).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  }
+const formatTime = (seconds: number) =>
+  new Date(seconds * 1000).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 
-  return String(time);
-};
+const getPointCount = (ch1: number[], ch2: number[], timestamps: number[]) =>
+  Math.min(ch1.length, ch2.length, timestamps.length);
 
-const buildPointPairs = (
+const buildWindowedData = (
   ch1: number[],
   ch2: number[],
   timestamps: number[],
-  startIndex: number,
-  previousRenderedTime: number | null
-) => {
-  const pointCount = Math.min(ch1.length, ch2.length, timestamps.length);
-  const nextPairs: PendingPair[] = [];
-  let nextRenderedTime = previousRenderedTime;
+  windowSeconds: WindowSeconds
+): uPlot.AlignedData => {
+  const pointCount = getPointCount(ch1, ch2, timestamps);
 
-  for (let index = startIndex; index < pointCount; index += 1) {
-    const incomingTime = timestamps[index] / 1000;
-    const normalizedTime =
-      nextRenderedTime === null || incomingTime > nextRenderedTime
-        ? incomingTime
-        : nextRenderedTime + 0.001;
-
-    const pointTime = normalizedTime as UTCTimestamp;
-
-    nextPairs.push({
-      ch1: { time: pointTime, value: ch1[index] ?? 0 },
-      ch2: { time: pointTime, value: ch2[index] ?? 0 },
-    });
-
-    nextRenderedTime = normalizedTime;
+  if (pointCount === 0) {
+    return EMPTY_DATA;
   }
 
+  const latestMs = timestamps[pointCount - 1];
+  const earliestMs = latestMs - windowSeconds * 1000;
+  let startIndex = 0;
+
+  while (startIndex < pointCount - 1 && timestamps[startIndex] < earliestMs) {
+    startIndex += 1;
+  }
+
+  const visibleCount = pointCount - startIndex;
+  const xValues = new Float64Array(visibleCount);
+  const y1Values = new Array<number>(visibleCount);
+  const y2Values = new Array<number>(visibleCount);
+  let lastSecond: number | null = null;
+
+  for (let sourceIndex = startIndex; sourceIndex < pointCount; sourceIndex += 1) {
+    const targetIndex = sourceIndex - startIndex;
+    const rawSecond = timestamps[sourceIndex] / 1000;
+    const second: number =
+      lastSecond === null || rawSecond > lastSecond
+        ? rawSecond
+        : lastSecond + 0.001;
+
+    xValues[targetIndex] = second;
+    y1Values[targetIndex] = ch1[sourceIndex] ?? 0;
+    y2Values[targetIndex] = ch2[sourceIndex] ?? 0;
+    lastSecond = second;
+  }
+
+  return [xValues, y1Values, y2Values];
+};
+
+const getLatestSecond = (data: uPlot.AlignedData) => {
+  const xValues = data[0];
+
+  if (xValues.length === 0) {
+    return null;
+  }
+
+  return Number(xValues[xValues.length - 1]);
+};
+
+const makeOptions = (
+  width: number,
+  height: number,
+  theme: ChartTheme,
+  isUart: boolean,
+  ch1Visible: boolean,
+  ch2Visible: boolean,
+  onScaleChange: (chart: uPlot) => void
+): uPlot.Options => {
+  const colors = THEME_COLORS[theme];
+  const steppedFn = uPlot.paths.stepped;
+  const linePath = isUart && steppedFn ? steppedFn({ align: 1 }) : undefined;
+
   return {
-    nextPairs,
-    nextRenderedTime,
-    pointCount,
+    width,
+    height,
+    padding: [12, 8, 0, 0],
+    legend: {
+      show: false,
+    },
+    cursor: {
+      show: true,
+      x: true,
+      y: true,
+      sync: {
+        key: "eeg-chart-v2",
+      },
+      drag: {
+        x: true,
+        y: false,
+        setScale: true,
+      },
+      points: {
+        size: 7,
+      },
+    },
+    scales: {
+      x: {
+        time: true,
+      },
+      y: isUart
+        ? {
+            auto: false,
+            range: [0, 255],
+          }
+        : {
+            auto: true,
+          },
+    },
+    axes: [
+      {
+        scale: "x",
+        stroke: colors.text,
+        grid: {
+          stroke: colors.grid,
+          width: 1,
+        },
+        ticks: {
+          show: false,
+        },
+        border: {
+          show: false,
+        },
+        values: (_chart, splits) => splits.map(formatTime),
+      },
+      {
+        scale: "y",
+        side: 1,
+        stroke: colors.text,
+        grid: {
+          stroke: colors.grid,
+          width: 1,
+        },
+        ticks: {
+          show: false,
+        },
+        border: {
+          show: false,
+        },
+        values: (_chart, splits) =>
+          splits.map((value) => (isUart ? `${Math.round(value)}` : value.toFixed(2))),
+      },
+    ],
+    series: [
+      {},
+      {
+        label: "CH1",
+        scale: "y",
+        show: ch1Visible,
+        stroke: CH1_COLOR,
+        width: 2,
+        paths: linePath,
+        points: {
+          show: false,
+        },
+        value: (_chart, value) =>
+          isUart ? `${Math.round(value)}` : value.toFixed(2),
+      },
+      {
+        label: "CH2",
+        scale: "y",
+        show: ch2Visible,
+        stroke: CH2_COLOR,
+        width: 2,
+        paths: linePath,
+        points: {
+          show: false,
+        },
+        value: (_chart, value) =>
+          isUart ? `${Math.round(value)}` : value.toFixed(2),
+      },
+    ],
+    hooks: {
+      ready: [
+        (chart) => {
+          chart.root.style.background = colors.background;
+        },
+      ],
+      setScale: [
+        (chart, scaleKey) => {
+          if (scaleKey === "x") {
+            onScaleChange(chart);
+          }
+        },
+      ],
+    },
   };
 };
 
@@ -136,15 +264,21 @@ function EEGChartV2({
   onCh2Toggle,
   onThemeToggle,
 }: EEGChartV2Props) {
+  const chartData = useMemo(
+    () => buildWindowedData(ch1, ch2, timestamps, windowSeconds),
+    [ch1, ch2, timestamps, windowSeconds]
+  );
+
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const ch1SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const ch2SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const lastRenderedTimeRef = useRef<number | null>(null);
-  const lastProcessedCountRef = useRef(0);
-  const lastInputTimestampRef = useRef<number | null>(null);
-  const pendingPairsRef = useRef<PendingPair[]>([]);
+  const chartRef = useRef<uPlot | null>(null);
+  const displayDataRef = useRef<uPlot.AlignedData>(chartData);
+  const bufferedDataRef = useRef<uPlot.AlignedData | null>(null);
+  const windowSecondsRef = useRef<WindowSeconds>(windowSeconds);
+  const latestLiveSecondRef = useRef<number | null>(getLatestSecond(chartData));
+  const visibleRangeRef = useRef<VisibleRange | null>(null);
   const atLiveEdgeRef = useRef(true);
+  const isProgrammaticScaleRef = useRef(false);
+  const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
   const [showLiveButton, setShowLiveButton] = useState(false);
 
   const isUart = mode === "uart";
@@ -155,43 +289,64 @@ function EEGChartV2({
       ? "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
       : "bg-[#EAF0F8] text-[#6B7280] hover:bg-[#111827] hover:text-white";
 
-  const syncLiveEdgeState = () => {
-    const chart = chartRef.current;
+  useEffect(() => {
+    windowSecondsRef.current = windowSeconds;
+  }, [windowSeconds]);
 
-    if (!chart) {
+  const setVisibleRange = useCallback((chart: uPlot, min: number, max: number) => {
+    visibleRangeRef.current = { min, max };
+    isProgrammaticScaleRef.current = true;
+    chart.setScale("x", { min, max });
+    isProgrammaticScaleRef.current = false;
+  }, []);
+
+  const syncLiveEdgeState = useCallback((chart: uPlot) => {
+    const xMin = chart.scales.x.min;
+    const xMax = chart.scales.x.max;
+
+    if (xMin !== undefined && xMax !== undefined) {
+      visibleRangeRef.current = { min: xMin, max: xMax };
+    }
+
+    if (isProgrammaticScaleRef.current) {
       return;
     }
 
-    const distanceFromLive = Math.abs(chart.timeScale().scrollPosition());
-    const isAtLiveEdge = distanceFromLive < 0.5;
+    const latestSecond = latestLiveSecondRef.current;
+
+    if (latestSecond === null || xMax === undefined) {
+      atLiveEdgeRef.current = true;
+      setShowLiveButton(false);
+      return;
+    }
+
+    const isAtLiveEdge = xMax >= latestSecond - 0.25;
 
     atLiveEdgeRef.current = isAtLiveEdge;
     setShowLiveButton(!isAtLiveEdge);
-  };
+  }, []);
 
-  const snapToLive = (force = false) => {
-    const chart = chartRef.current;
-    const latestRenderedTime = lastRenderedTimeRef.current;
+  const snapToLive = useCallback(
+    (force = false) => {
+      const chart = chartRef.current;
+      const latestSecond = latestLiveSecondRef.current;
 
-    if (!chart || latestRenderedTime === null) {
-      return;
-    }
+      if (!chart || latestSecond === null) {
+        return;
+      }
 
-    if (!force && !atLiveEdgeRef.current) {
-      return;
-    }
+      if (!force && !atLiveEdgeRef.current) {
+        return;
+      }
 
-    const startTime = Math.max(latestRenderedTime - windowSeconds, 0) as UTCTimestamp;
+      const min = Math.max(latestSecond - windowSecondsRef.current, 0);
 
-    chart.timeScale().setVisibleRange({
-      from: startTime,
-      to: latestRenderedTime as UTCTimestamp,
-    });
-    chart.timeScale().scrollToRealTime();
-
-    atLiveEdgeRef.current = true;
-    setShowLiveButton(false);
-  };
+      setVisibleRange(chart, min, latestSecond);
+      atLiveEdgeRef.current = true;
+      setShowLiveButton(false);
+    },
+    [setVisibleRange]
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -200,220 +355,119 @@ function EEGChartV2({
       return;
     }
 
-    const chart = createChart(container, {
-      width: container.clientWidth,
-      height: container.clientHeight,
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
-      leftPriceScale: {
-        visible: false,
-      },
-      rightPriceScale: {
-        visible: true,
-        borderVisible: false,
-        scaleMargins: { top: 0.08, bottom: 0.12 },
-      },
-      timeScale: {
-        borderVisible: false,
-        timeVisible: true,
-        secondsVisible: true,
-      },
-      localization: {
-        timeFormatter: formatChartTime,
-      },
-      ...THEME_OPTIONS[theme],
-    });
+    const updateDimensions = () => {
+      const nextWidth = Math.max(1, Math.floor(container.clientWidth));
+      const nextHeight = Math.max(1, Math.floor(container.clientHeight));
 
-    const sharedSeriesOptions = {
-      lineWidth: 2 as const,
-      lastValueVisible: true,
-      priceLineVisible: false,
-      crosshairMarkerVisible: true,
-      priceScaleId: "right" as const,
-    };
+      setDimensions((previous) => {
+        if (
+          previous?.width === nextWidth &&
+          previous.height === nextHeight
+        ) {
+          return previous;
+        }
 
-    const nextCh1Series = chart.addSeries(LineSeries, {
-      ...sharedSeriesOptions,
-      color: "#06B6D4",
-    });
-    const nextCh2Series = chart.addSeries(LineSeries, {
-      ...sharedSeriesOptions,
-      color: "#2563EB",
-    });
-
-    chartRef.current = chart;
-    ch1SeriesRef.current = nextCh1Series;
-    ch2SeriesRef.current = nextCh2Series;
-
-    const handleVisibleRangeChange = () => {
-      syncLiveEdgeState();
-    };
-
-    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
-
-    const resizeObserver = new ResizeObserver(() => {
-      chart.applyOptions({
-        width: container.clientWidth,
-        height: container.clientHeight,
+        return { width: nextWidth, height: nextHeight };
       });
-    });
+    };
 
+    updateDimensions();
+
+    const resizeObserver = new ResizeObserver(updateDimensions);
     resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
-      chart.remove();
-      chartRef.current = null;
-      ch1SeriesRef.current = null;
-      ch2SeriesRef.current = null;
-      lastRenderedTimeRef.current = null;
-      lastProcessedCountRef.current = 0;
-      lastInputTimestampRef.current = null;
-      pendingPairsRef.current = [];
-      atLiveEdgeRef.current = true;
     };
   }, []);
 
   useEffect(() => {
-    chartRef.current?.applyOptions(THEME_OPTIONS[theme]);
-  }, [theme]);
+    const container = containerRef.current;
 
-  useEffect(() => {
-    const nextCh1Series = ch1SeriesRef.current;
-    const nextCh2Series = ch2SeriesRef.current;
-
-    if (!nextCh1Series || !nextCh2Series) {
+    if (!container || dimensions === null) {
       return;
     }
 
-    if (isUart) {
-      chartRef.current?.priceScale("right").applyOptions({
-        autoScale: true,
-        mode: PriceScaleMode.Normal,
-      });
-      nextCh1Series.applyOptions({
-        lineType: LineType.WithSteps,
-        priceFormat: { type: "price", precision: 0, minMove: 1 },
-        autoscaleInfoProvider: uartAutoscaleInfoProvider,
-      });
-      nextCh2Series.applyOptions({
-        lineType: LineType.WithSteps,
-        priceFormat: { type: "price", precision: 0, minMove: 1 },
-        autoscaleInfoProvider: uartAutoscaleInfoProvider,
-      });
+    chartRef.current?.destroy();
+    chartRef.current = null;
+
+    const dataToRender = displayDataRef.current;
+    const chart = new uPlot(
+      makeOptions(
+        dimensions.width,
+        dimensions.height,
+        theme,
+        isUart,
+        ch1Visible,
+        ch2Visible,
+        syncLiveEdgeState
+      ),
+      dataToRender,
+      container
+    );
+
+    chartRef.current = chart;
+    latestLiveSecondRef.current = getLatestSecond(dataToRender);
+
+    if (atLiveEdgeRef.current) {
+      snapToLive(true);
+    } else if (visibleRangeRef.current !== null) {
+      setVisibleRange(chart, visibleRangeRef.current.min, visibleRangeRef.current.max);
+      syncLiveEdgeState(chart);
+    } else {
+      syncLiveEdgeState(chart);
+    }
+
+    return () => {
+      chart.destroy();
+
+      if (chartRef.current === chart) {
+        chartRef.current = null;
+      }
+    };
+  }, [dimensions, theme, isUart, syncLiveEdgeState, snapToLive, setVisibleRange]);
+
+  useEffect(() => {
+    if (paused) {
+      bufferedDataRef.current = chartData;
       return;
     }
 
-    nextCh1Series.applyOptions({
-      lineType: LineType.Simple,
-      priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-      autoscaleInfoProvider: undefined,
-    });
-    nextCh2Series.applyOptions({
-      lineType: LineType.Simple,
-      priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-      autoscaleInfoProvider: undefined,
-    });
-  }, [isUart]);
+    const nextData = bufferedDataRef.current ?? chartData;
+    bufferedDataRef.current = null;
+    displayDataRef.current = nextData;
+    latestLiveSecondRef.current = getLatestSecond(nextData);
+
+    const chart = chartRef.current;
+
+    if (!chart) {
+      return;
+    }
+
+    const previousXMin = chart.scales.x.min;
+    const previousXMax = chart.scales.x.max;
+
+    chart.setData(nextData, true);
+
+    if (atLiveEdgeRef.current) {
+      snapToLive(true);
+    } else if (previousXMin !== undefined && previousXMax !== undefined) {
+      setVisibleRange(chart, previousXMin, previousXMax);
+      syncLiveEdgeState(chart);
+    }
+  }, [chartData, paused, snapToLive, syncLiveEdgeState, setVisibleRange]);
 
   useEffect(() => {
-    ch1SeriesRef.current?.applyOptions({ visible: ch1Visible });
+    chartRef.current?.setSeries(1, { show: ch1Visible });
   }, [ch1Visible]);
 
   useEffect(() => {
-    ch2SeriesRef.current?.applyOptions({ visible: ch2Visible });
+    chartRef.current?.setSeries(2, { show: ch2Visible });
   }, [ch2Visible]);
 
   useEffect(() => {
     snapToLive(true);
-  }, [windowSeconds]);
-
-  useEffect(() => {
-    if (paused) {
-      return;
-    }
-
-    const nextCh1Series = ch1SeriesRef.current;
-    const nextCh2Series = ch2SeriesRef.current;
-
-    if (!nextCh1Series || !nextCh2Series || pendingPairsRef.current.length === 0) {
-      if (atLiveEdgeRef.current) {
-        snapToLive(true);
-      }
-      return;
-    }
-
-    pendingPairsRef.current.forEach((pair) => {
-      nextCh1Series.update(pair.ch1);
-      nextCh2Series.update(pair.ch2);
-    });
-
-    pendingPairsRef.current = [];
-
-    if (atLiveEdgeRef.current) {
-      snapToLive(true);
-    }
-  }, [paused, windowSeconds]);
-
-  useEffect(() => {
-    const nextCh1Series = ch1SeriesRef.current;
-    const nextCh2Series = ch2SeriesRef.current;
-
-    if (!nextCh1Series || !nextCh2Series) {
-      return;
-    }
-
-    const pointCount = Math.min(ch1.length, ch2.length, timestamps.length);
-
-    if (pointCount === 0) {
-      nextCh1Series.setData([]);
-      nextCh2Series.setData([]);
-      pendingPairsRef.current = [];
-      lastRenderedTimeRef.current = null;
-      lastProcessedCountRef.current = 0;
-      lastInputTimestampRef.current = null;
-      return;
-    }
-
-    const latestInputTimestamp = timestamps[pointCount - 1];
-    const needsFullReset =
-      lastProcessedCountRef.current === 0 ||
-      pointCount < lastProcessedCountRef.current ||
-      (lastInputTimestampRef.current !== null &&
-        latestInputTimestamp < lastInputTimestampRef.current);
-
-    const startIndex = needsFullReset ? 0 : lastProcessedCountRef.current;
-    const { nextPairs, nextRenderedTime } = buildPointPairs(
-      ch1,
-      ch2,
-      timestamps,
-      startIndex,
-      needsFullReset ? null : lastRenderedTimeRef.current
-    );
-
-    if (needsFullReset) {
-      nextCh1Series.setData(nextPairs.map((pair) => pair.ch1));
-      nextCh2Series.setData(nextPairs.map((pair) => pair.ch2));
-      pendingPairsRef.current = [];
-    } else if (paused) {
-      pendingPairsRef.current.push(...nextPairs);
-    } else {
-      nextPairs.forEach((pair) => {
-        nextCh1Series.update(pair.ch1);
-        nextCh2Series.update(pair.ch2);
-      });
-    }
-
-    lastRenderedTimeRef.current = nextRenderedTime;
-    lastProcessedCountRef.current = pointCount;
-    lastInputTimestampRef.current = latestInputTimestamp;
-
-    if (!paused && atLiveEdgeRef.current) {
-      snapToLive(true);
-    }
-  }, [ch1, ch2, paused, timestamps, windowSeconds]);
+  }, [snapToLive, windowSeconds]);
 
   return (
     <section className="fx2-card fx2-outline w-full min-h-[280px] sm:min-h-[360px] lg:min-h-[480px]">
@@ -489,7 +543,7 @@ function EEGChartV2({
 
               {isUart ? (
                 <span className="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-                  바이너리 모드 · 0-255
+                  UART 모드 0-255
                 </span>
               ) : null}
             </div>

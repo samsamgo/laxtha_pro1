@@ -23,6 +23,10 @@ export interface Fx2SessionStats {
   connectionDrops: number;
   unstableMoments: number;
   notWornMoments: number;
+  ch1Sum: number;
+  ch2Sum: number;
+  ch1PeakAbs: number;
+  ch2PeakAbs: number;
 }
 
 export interface Fx2State {

@@ -61,6 +61,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const hardwareRef = useRef(new Fx2HardwareService());
   const mockTimerRef = useRef<number | null>(null);
   const stateRef = useRef(state);
+  const pendingHardwareRef = useRef<Fx2IncomingMessage[]>([]);
+  const hardwareRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -113,9 +115,24 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         return;
       }
 
-      applyLocalMessage(nextMessage, setState);
-      setSelectedModeState(nextMessage.mode);
-      setSessionPhase("running");
+      pendingHardwareRef.current.push(nextMessage);
+
+      if (hardwareRafRef.current === null) {
+        hardwareRafRef.current = requestAnimationFrame(() => {
+          const messages = pendingHardwareRef.current;
+          pendingHardwareRef.current = [];
+          hardwareRafRef.current = null;
+
+          if (messages.length === 0) return;
+
+          setState((prev) =>
+            messages.reduce((s, msg) => applyIncomingMessage(msg, s), prev)
+          );
+          const last = messages[messages.length - 1];
+          setSelectedModeState(last.mode);
+          setSessionPhase("running");
+        });
+      }
     });
   }, []);
 
@@ -123,6 +140,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     return () => {
       if (mockTimerRef.current !== null) {
         window.clearInterval(mockTimerRef.current);
+      }
+      if (hardwareRafRef.current !== null) {
+        cancelAnimationFrame(hardwareRafRef.current);
       }
       void hardwareRef.current.disconnect();
     };

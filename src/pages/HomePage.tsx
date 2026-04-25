@@ -73,6 +73,10 @@ export default function HomePage() {
     selectedMode === "demo" ||
     (selectedMode === "bluetooth" ? bleSupported : serialSupported);
 
+  const isConnecting =
+    selectedMode !== "demo" &&
+    (hardwareStatus === "requesting" || hardwareStatus === "connecting");
+
   const unsupportedMessage = useMemo(() => {
     if (selectedMode === "bluetooth" && !bleSupported) {
       return "이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
@@ -189,14 +193,24 @@ export default function HomePage() {
         <button
           type="button"
           onClick={handleStart}
-          disabled={!selectedModeSupported}
-          className={`mt-8 inline-flex items-center rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-opacity duration-200 ${
-            selectedModeSupported
+          disabled={!selectedModeSupported || isConnecting}
+          className={`mt-8 inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-opacity duration-200 ${
+            selectedModeSupported && !isConnecting
               ? "bg-[#2563EB] hover:opacity-90"
               : "cursor-not-allowed bg-gray-400 opacity-50"
           }`}
         >
-          실시간 측정 시작
+          {isConnecting ? (
+            <>
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+              연결 중...
+            </>
+          ) : (
+            "실시간 측정 시작"
+          )}
         </button>
       </section>
 

@@ -7,6 +7,7 @@ import {
   PointElement,
   Tooltip,
 } from "chart.js";
+import { memo } from "react";
 import { Line } from "react-chartjs-2";
 import { useFx2Theme } from "../context/ThemeContext";
 import type { DeviceMode } from "../types/fx2";
@@ -27,7 +28,7 @@ interface LineChartCardProps {
   mode?: DeviceMode;
 }
 
-export default function LineChartCard({
+function LineChartCard({
   title,
   values,
   color,
@@ -154,3 +155,5 @@ export default function LineChartCard({
     </section>
   );
 }
+
+export default memo(LineChartCard);

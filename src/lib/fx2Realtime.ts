@@ -112,6 +112,10 @@ const createEmptyStats = (): Fx2SessionStats => ({
   connectionDrops: 0,
   unstableMoments: 0,
   notWornMoments: 0,
+  ch1Sum: 0,
+  ch2Sum: 0,
+  ch1PeakAbs: 0,
+  ch2PeakAbs: 0,
 });
 
 export const toWearStatus = (wearing: boolean, noise: boolean): WearStatus => {
@@ -396,14 +400,13 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
         prev.stats.unstableMoments + (wearStatus === "unstable" ? 1 : 0),
       notWornMoments:
         prev.stats.notWornMoments + (wearStatus === "not_worn" ? 1 : 0),
+      ch1Sum: prev.stats.ch1Sum + message.ch1,
+      ch2Sum: prev.stats.ch2Sum + message.ch2,
+      ch1PeakAbs: Math.max(prev.stats.ch1PeakAbs, Math.abs(message.ch1)),
+      ch2PeakAbs: Math.max(prev.stats.ch2PeakAbs, Math.abs(message.ch2)),
     },
   };
 };
-
-const average = (values: number[]) =>
-  values.length === 0
-    ? 0
-    : values.reduce((sum, value) => sum + value, 0) / values.length;
 
 export interface Fx2SummarySnapshot {
   averageHeartRate: number;
@@ -418,17 +421,13 @@ export interface Fx2SummarySnapshot {
 }
 
 export const summarizeFx2State = (state: Fx2State): Fx2SummarySnapshot => {
-  const leftChannelAverage = roundToSingleDecimal(average(state.ch1));
-  const rightChannelAverage = roundToSingleDecimal(average(state.ch2));
-  const leftPeak = roundToSingleDecimal(
-    Math.max(...state.ch1.map((value) => Math.abs(value)), 0)
-  );
-  const rightPeak = roundToSingleDecimal(
-    Math.max(...state.ch2.map((value) => Math.abs(value)), 0)
-  );
-  const balanceGap = roundToSingleDecimal(
-    Math.abs(leftChannelAverage - rightChannelAverage)
-  );
+  const n = state.stats.sampleCount;
+  const leftChannelAverage = roundToSingleDecimal(n > 0 ? state.stats.ch1Sum / n : 0);
+  const rightChannelAverage = roundToSingleDecimal(n > 0 ? state.stats.ch2Sum / n : 0);
+  const leftPeak = roundToSingleDecimal(state.stats.ch1PeakAbs);
+  const rightPeak = roundToSingleDecimal(state.stats.ch2PeakAbs);
+  const balanceGap = roundToSingleDecimal(Math.abs(leftChannelAverage - rightChannelAverage));
+
   const stabilityPenalty =
     state.stats.connectionDrops * 10 +
     state.stats.unstableMoments * 2 +
@@ -439,7 +438,7 @@ export const summarizeFx2State = (state: Fx2State): Fx2SummarySnapshot => {
       100,
       Math.round(
         state.stats.averageSignalQuality -
-          (stabilityPenalty / Math.max(state.stats.sampleCount, 1)) * 10 +
+          (stabilityPenalty / Math.max(n, 1)) * 10 +
           10
       )
     )
@@ -447,16 +446,13 @@ export const summarizeFx2State = (state: Fx2State): Fx2SummarySnapshot => {
 
   let summaryText = "연결 직후라 아직 충분한 데이터가 쌓이지 않았습니다.";
 
-  if (state.stats.sampleCount >= 3) {
+  if (n >= 3) {
     if (stabilityScore >= 85) {
-      summaryText =
-        "착용과 연결 상태가 안정적으로 유지되어 시연 흐름이 아주 좋습니다.";
+      summaryText = "착용과 연결 상태가 안정적으로 유지되어 시연 흐름이 아주 좋습니다.";
     } else if (stabilityScore >= 65) {
-      summaryText =
-        "전반적으로는 안정적이지만 중간중간 신호 품질 저하가 감지됩니다.";
+      summaryText = "전반적으로는 안정적이지만 중간중간 신호 품질 저하가 감지됩니다.";
     } else {
-      summaryText =
-        "착용 또는 연결 안정성이 낮아 보여서 시연 전 상태 점검이 필요합니다.";
+      summaryText = "착용 또는 연결 안정성이 낮아 보여서 시연 전 상태 점검이 필요합니다.";
     }
   }
 

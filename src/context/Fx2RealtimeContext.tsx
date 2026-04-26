@@ -170,9 +170,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     }
   };
 
-  const startSession = () => {
+  const startSession = async () => {
     stopMockFeed();
-    void hardwareRef.current.disconnect();
+    await hardwareRef.current.disconnect();
     resetState(selectedMode);
     setSessionPhase("running");
 
@@ -183,7 +183,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       return;
     }
 
-    void connectHardware(selectedMode);
+    await connectHardware(selectedMode);
   };
 
   const stopSession = () => {

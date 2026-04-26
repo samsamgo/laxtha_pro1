@@ -17,7 +17,6 @@ export interface EEGChartV2Props {
   onWindowChange: (seconds: ExtWindowSeconds) => void;
   onCh1Toggle?: () => void;
   onCh2Toggle?: () => void;
-  onThemeToggle?: () => void;
 }
 
 type ChartTheme = EEGChartV2Props["theme"];
@@ -260,7 +259,6 @@ function EEGChartV2({
   onWindowChange,
   onCh1Toggle,
   onCh2Toggle,
-  onThemeToggle,
 }: EEGChartV2Props) {
   const chartData = useMemo(
     () => buildWindowedData(ch1, ch2, timestamps, windowSeconds),
@@ -569,14 +567,6 @@ function EEGChartV2({
                 }`}
               >
                 CH2
-              </button>
-
-              <button
-                type="button"
-                onClick={onThemeToggle}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${secondaryButtonClass}`}
-              >
-                {theme === "dark" ? "라이트" : "다크"}
               </button>
 
               <button

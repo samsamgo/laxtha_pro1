@@ -123,12 +123,11 @@ export default function LivePage() {
     hardwareStatus,
     hardwareDetail,
     startSession,
-    stopSession,
     disconnectHardware,
     pushManualUpdate,
     applyPreset,
   } = useFx2RealtimeSession();
-  const { chartTheme, toggleDarkMode } = useFx2Theme();
+  const { chartTheme } = useFx2Theme();
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [windowSeconds, setWindowSeconds] = useState<ExtWindowSeconds>(30);
@@ -249,6 +248,11 @@ export default function LivePage() {
   const canReconnect =
     selectedMode !== "demo" &&
     (hardwareStatus === "idle" || hardwareStatus === "error");
+  const canDisconnect =
+    selectedMode !== "demo" &&
+    (hardwareStatus === "requesting" ||
+      hardwareStatus === "connecting" ||
+      hardwareStatus === "connected");
 
   return (
     <>
@@ -334,32 +338,6 @@ export default function LivePage() {
               >
                 {panelOpen ? "데모 패널 숨기기" : "데모 패널 열기"}
               </button>
-              {selectedMode !== "demo" ? (
-                <button
-                  type="button"
-                  onClick={disconnectHardware}
-                  disabled={canReconnect}
-                  className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                >
-                  장치 연결 해제
-                </button>
-              ) : null}
-              {canReconnect ? (
-                <button
-                  type="button"
-                  onClick={startSession}
-                  className="rounded-full bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white shadow-md transition-opacity duration-200 hover:opacity-90"
-                >
-                  다시 연결
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={stopSession}
-                className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-[#EF4444] transition-colors duration-200 hover:bg-[#EF4444] hover:text-white dark:bg-red-500/10 dark:text-red-300"
-              >
-                측정 종료
-              </button>
             </div>
           </div>
 
@@ -371,6 +349,30 @@ export default function LivePage() {
               <>
                 <span>·</span>
                 <span>{hardwareDetail}</span>
+              </>
+            ) : null}
+            {canDisconnect ? (
+              <>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={disconnectHardware}
+                  className="font-semibold text-[#6B7280] underline-offset-4 hover:text-[#111827] hover:underline dark:text-slate-300 dark:hover:text-white"
+                >
+                  연결 해제
+                </button>
+              </>
+            ) : null}
+            {canReconnect ? (
+              <>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => void startSession()}
+                  className="font-semibold text-[#2563EB] underline-offset-4 hover:underline dark:text-blue-300"
+                >
+                  다시 연결
+                </button>
               </>
             ) : null}
           </div>
@@ -432,7 +434,6 @@ export default function LivePage() {
             onWindowChange={setWindowSeconds}
             onCh1Toggle={() => setCh1Visible((c) => !c)}
             onCh2Toggle={() => setCh2Visible((c) => !c)}
-            onThemeToggle={toggleDarkMode}
           />
         </div>
 

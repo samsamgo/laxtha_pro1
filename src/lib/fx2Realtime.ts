@@ -11,24 +11,6 @@ export const MAX_CHART_POINTS = 3000;
 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
-const INITIAL_WAVE_POINTS = 36;
-const INITIAL_TIMESTAMP_STEP_MS = 1000;
-
-const seedWave = (phase: number, amplitude = 1) =>
-  Array.from({ length: INITIAL_WAVE_POINTS }, (_, index) => {
-    const noise = (Math.random() - 0.5) * 0.16;
-    return Math.sin((index + phase) / 3) * amplitude + noise;
-  });
-
-const createSeededTimestamps = (length: number) => {
-  const endTime = Date.now();
-
-  return Array.from({ length }, (_, index) => {
-    const offset = length - 1 - index;
-    return endTime - offset * INITIAL_TIMESTAMP_STEP_MS;
-  });
-};
-
 const clampArray = <T,>(values: T[], max: number) =>
   values.slice(Math.max(values.length - max, 0));
 
@@ -140,10 +122,6 @@ export const toSignalStatus = (quality: number): SignalStatus => {
 
 export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
   const startedAt = new Date().toISOString();
-  const ch1 = seedWave(2, 1.6);
-  const ch2 = seedWave(8, 1.35);
-  const ppg = seedWave(11, 0.9);
-  const timestamps = createSeededTimestamps(ch1.length);
 
   return {
     mode,
@@ -153,12 +131,12 @@ export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
     heartRate: 72,
     signalQuality: 88,
     noise: false,
-    ch1,
-    ch2,
-    timestamps,
-    ppg,
-    heartRateHistory: [72],
-    signalQualityHistory: [88],
+    ch1: [],
+    ch2: [],
+    timestamps: [],
+    ppg: [],
+    heartRateHistory: [],
+    signalQualityHistory: [],
     sessionSeconds: 0,
     sessionStartedAt: startedAt,
     lastUpdated: startedAt,

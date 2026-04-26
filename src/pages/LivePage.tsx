@@ -334,14 +334,16 @@ export default function LivePage() {
               >
                 {panelOpen ? "데모 패널 숨기기" : "데모 패널 열기"}
               </button>
-              <button
-                type="button"
-                onClick={disconnectHardware}
-                disabled={selectedMode !== "demo" && canReconnect}
-                className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              >
-                장치 연결 해제
-              </button>
+              {selectedMode !== "demo" ? (
+                <button
+                  type="button"
+                  onClick={disconnectHardware}
+                  disabled={canReconnect}
+                  className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  장치 연결 해제
+                </button>
+              ) : null}
               {canReconnect ? (
                 <button
                   type="button"

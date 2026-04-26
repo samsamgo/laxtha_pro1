@@ -198,6 +198,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   };
 
   const pushManualUpdate = (patch: Partial<Fx2IncomingMessage>) => {
+    if (selectedMode === "demo") {
+      stopMockFeed();
+    }
+
     const nextMessage = buildMessageFromState(
       { ...state, mode: selectedMode },
       { ...patch, mode: selectedMode }

@@ -10,11 +10,21 @@ import HiddenDemoPanel from "../components/HiddenDemoPanel";
 import LineChartCard from "../components/LineChartCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
+import { useEegSessionRecorder } from "../hooks/useEegSessionRecorder";
+import type { ExtWindowSeconds } from "../types/eegRecorder";
 
 const formatDuration = (seconds: number) => {
   const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
   const mm = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+};
+
+const formatMs = (ms: number) => {
+  const totalSec = Math.floor(ms / 1000);
+  const hh = String(Math.floor(totalSec / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
+  const ss = String(totalSec % 60).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
 };
 
@@ -30,10 +40,14 @@ const signalLabel = {
   poor: "부족",
 } as const;
 
-const chartPointLimitMap: Record<10 | 30 | 60, number> = {
-  10: 50,
-  30: 150,
-  60: 300,
+// Max points passed to chart per window — display buffer only, not recording
+const chartPointLimitMap: Record<ExtWindowSeconds, number> = {
+  5: 50,
+  10: 100,
+  30: 300,
+  60: 600,
+  120: 1200,
+  300: 3000,
 };
 
 function HeartIcon() {
@@ -89,16 +103,12 @@ function CompactStatusItem({
 }: CompactStatusItemProps) {
   return (
     <div className="fx2-card fx2-outline flex items-center gap-3 px-4 py-3">
-      <span
-        className={`inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${iconClassName}`}
-      >
+      <span className={`inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${iconClassName}`}>
         {icon}
       </span>
       <div className="min-w-0">
         <p className={`text-2xl font-bold leading-none ${valueClassName}`}>{value}</p>
-        <p className="mt-1 text-xs uppercase tracking-wide text-[#6B7280] dark:text-slate-400">
-          {label}
-        </p>
+        <p className="mt-1 text-xs uppercase tracking-wide text-[#6B7280] dark:text-slate-400">{label}</p>
       </div>
     </div>
   );
@@ -109,6 +119,7 @@ export default function LivePage() {
     state,
     summary,
     selectedMode,
+    sessionPhase,
     hardwareDetail,
     stopSession,
     disconnectHardware,
@@ -118,7 +129,7 @@ export default function LivePage() {
   const { chartTheme, toggleDarkMode } = useFx2Theme();
 
   const [panelOpen, setPanelOpen] = useState(false);
-  const [windowSeconds, setWindowSeconds] = useState<10 | 30 | 60>(30);
+  const [windowSeconds, setWindowSeconds] = useState<ExtWindowSeconds>(30);
   const [paused, setPaused] = useState(false);
   const [ch1Visible, setCh1Visible] = useState(true);
   const [ch2Visible, setCh2Visible] = useState(true);
@@ -129,12 +140,66 @@ export default function LivePage() {
 
   const logContainerRef = useRef<HTMLUListElement | null>(null);
   const logPinnedRef = useRef(true);
+  const prevPhaseRef = useRef(sessionPhase);
+  const sessionStartTsRef = useRef<number | null>(null);
+
+  // EEG session recorder (samples stored outside React state)
+  const {
+    summary: recSummary,
+    startRecording,
+    stopRecording,
+    clearRecording,
+    appendSample,
+    exportCsv,
+    exportJson,
+  } = useEegSessionRecorder();
+
+  // Track session phase transitions → start/stop recording
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = sessionPhase;
+
+    if (prev === sessionPhase) return;
+
+    if (sessionPhase === "running") {
+      sessionStartTsRef.current = Date.now();
+      startRecording(selectedMode);
+    } else if (sessionPhase === "stopped" && prev === "running") {
+      stopRecording();
+    }
+  }, [sessionPhase, selectedMode, startRecording, stopRecording]);
+
+  // Append one sample per state update (each new data point)
+  const prevTimestampLengthRef = useRef(state.timestamps.length);
+  useEffect(() => {
+    if (sessionPhase !== "running") return;
+    if (state.timestamps.length === prevTimestampLengthRef.current) return;
+    prevTimestampLengthRef.current = state.timestamps.length;
+
+    const lastIdx = state.timestamps.length - 1;
+    if (lastIdx < 0) return;
+
+    const ts = state.timestamps[lastIdx];
+    const startTs = sessionStartTsRef.current ?? ts;
+
+    appendSample({
+      timestamp: new Date(ts).toISOString(),
+      elapsedMs: Math.max(0, ts - startTs),
+      ch1: state.ch1[lastIdx] ?? 0,
+      ch2: state.ch2[lastIdx] ?? 0,
+      bpm: state.heartRate,
+      wear: state.wearStatus,
+      signal: state.signalStatus,
+      mode: state.mode,
+    });
+  }, [state.timestamps.length, state.heartRate, state.wearStatus, state.signalStatus, sessionPhase, appendSample]);
 
   const visibleLogs = useMemo(
     () => state.logs.slice().reverse().slice(0, 10),
     [state.logs]
   );
 
+  // Display buffer — only recent window points, never full recording
   const chartSeries = useMemo(() => {
     const pointLimit = chartPointLimitMap[windowSeconds];
     const pointCount = Math.min(
@@ -152,52 +217,38 @@ export default function LivePage() {
   }, [state.ch1, state.ch2, state.timestamps, windowSeconds]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
 
     const mediaQuery = window.matchMedia("(min-width: 640px)");
     const syncExpanded = (matches: boolean) => {
-      const isDesktop = matches;
-      if (isDesktop) {
-        setEventLogExpanded(true);
-        return;
-      }
-
+      if (matches) { setEventLogExpanded(true); return; }
       setEventLogExpanded(false);
     };
 
-    const handleChange = (event: MediaQueryListEvent) => {
-      syncExpanded(event.matches);
-    };
-
+    const handleChange = (event: MediaQueryListEvent) => syncExpanded(event.matches);
     syncExpanded(mediaQuery.matches);
     mediaQuery.addEventListener("change", handleChange);
-
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, []);
 
   useEffect(() => {
-    if (!autoScrollLogs || !logPinnedRef.current) {
-      return;
-    }
-
+    if (!autoScrollLogs || !logPinnedRef.current) return;
     logContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [autoScrollLogs, visibleLogs]);
 
   const handleLogScroll = () => {
     const node = logContainerRef.current;
-
-    if (!node) {
-      return;
-    }
-
+    if (!node) return;
     logPinnedRef.current = node.scrollTop <= 12;
   };
+
+  const isRunning = sessionPhase === "running";
+  const isStopped = sessionPhase === "stopped";
 
   return (
     <>
       <div className="flex flex-col gap-5">
+        {/* Status bar */}
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div className="grid grid-cols-2 gap-3 2xl:flex 2xl:flex-1 2xl:flex-nowrap">
@@ -206,7 +257,6 @@ export default function LivePage() {
                 label="심박수"
                 value={`${state.heartRate}`}
                 iconClassName="bg-red-50 text-[#EF4444] dark:bg-red-500/10 dark:text-red-300"
-                valueClassName="text-[#111827] dark:text-white"
               />
               <CompactStatusItem
                 icon={<WearIcon />}
@@ -256,9 +306,25 @@ export default function LivePage() {
             </div>
 
             <div className="flex flex-wrap gap-2 2xl:justify-end">
+              {/* REC indicator — visible while running */}
+              {isRunning && recSummary.isRecording ? (
+                <div className="flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 dark:bg-red-500/10">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                  <span className="text-xs font-semibold text-red-600 dark:text-red-300">
+                    기록 중
+                  </span>
+                  <span className="text-xs text-red-500 dark:text-red-400">
+                    {formatMs(recSummary.durationMs)}
+                  </span>
+                  <span className="text-xs text-red-400 dark:text-red-500">
+                    {recSummary.sampleCount.toLocaleString()}샘플
+                  </span>
+                </div>
+              ) : null}
+
               <button
                 type="button"
-                onClick={() => setPanelOpen((current) => !current)}
+                onClick={() => setPanelOpen((c) => !c)}
                 className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-slate-800 dark:text-slate-300"
               >
                 {panelOpen ? "데모 패널 숨기기" : "데모 패널 열기"}
@@ -293,6 +359,47 @@ export default function LivePage() {
           </div>
         </section>
 
+        {/* Export section — shown after session ends if recording exists */}
+        {isStopped && recSummary.hasRecording ? (
+          <section className="fx2-card fx2-outline">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="fx2-title">데이터 내보내기</h2>
+                <p className="mt-1 text-xs text-[#6B7280] dark:text-slate-400">
+                  기록 시간 {formatMs(recSummary.durationMs)} · {recSummary.sampleCount.toLocaleString()}샘플
+                  {recSummary.startedAt
+                    ? ` · ${new Date(recSummary.startedAt).toLocaleTimeString("ko-KR")} 시작`
+                    : null}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="rounded-full bg-green-50 px-4 py-2 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-600 hover:text-white dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-600 dark:hover:text-white"
+                >
+                  CSV 내보내기
+                </button>
+                <button
+                  type="button"
+                  onClick={exportJson}
+                  className="rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-[#2563EB] dark:hover:text-white"
+                >
+                  JSON 내보내기
+                </button>
+                <button
+                  type="button"
+                  onClick={clearRecording}
+                  className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  기록 초기화
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {/* EEG chart */}
         <div className="w-full">
           <EEGChartV2
             ch1={chartSeries.ch1}
@@ -304,14 +411,15 @@ export default function LivePage() {
             ch1Visible={ch1Visible}
             ch2Visible={ch2Visible}
             theme={chartTheme}
-            onPauseToggle={() => setPaused((current) => !current)}
+            onPauseToggle={() => setPaused((c) => !c)}
             onWindowChange={setWindowSeconds}
-            onCh1Toggle={() => setCh1Visible((current) => !current)}
-            onCh2Toggle={() => setCh2Visible((current) => !current)}
+            onCh1Toggle={() => setCh1Visible((c) => !c)}
+            onCh2Toggle={() => setCh2Visible((c) => !c)}
             onThemeToggle={toggleDarkMode}
           />
         </div>
 
+        {/* Bottom row */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <section className="fx2-card fx2-outline">
             <div className="mb-4 flex items-start justify-between gap-3">
@@ -324,7 +432,7 @@ export default function LivePage() {
               <div className="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setAutoScrollLogs((current) => !current)}
+                  onClick={() => setAutoScrollLogs((c) => !c)}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
                     autoScrollLogs
                       ? "bg-[#2563EB] text-white"
@@ -335,7 +443,7 @@ export default function LivePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEventLogExpanded((current) => !current)}
+                  onClick={() => setEventLogExpanded((c) => !c)}
                   className="rounded-full bg-[#EAF0F8] px-3 py-1.5 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:hidden"
                 >
                   {eventLogExpanded ? "접기" : "펼치기"}

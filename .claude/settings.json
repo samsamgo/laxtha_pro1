@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /c/Users/dmast/Desktop/pro/laxtha_pro1 && echo '=== Git 상태 ===' && git status -s && echo '' && echo '=== 최근 커밋 ===' && git log --oneline -3"
+            "command": "cd /c/Users/dmast/Desktop/pro/laxtha_pro1 && echo '' && echo '=====================================================' && echo '⚠️  세션 종료 전 체크리스트' && echo '=====================================================' && echo '[ ] Notion에 연속 프롬프트 저장했는가?' && echo '    → https://www.notion.so/3427b08f46a880ed9babe7d4bd559f84' && echo '[ ] 빌드 성공 상태인가? (npm run build)' && echo '[ ] 미완료 작업을 명시했는가?' && echo '=====================================================' && echo '' && echo '=== Git 상태 ===' && git status -s && echo '' && echo '=== 최근 커밋 ===' && git log --oneline -5"
           }
         ]
       }

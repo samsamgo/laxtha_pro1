@@ -77,12 +77,18 @@ export default function Layout({ children, title }: LayoutProps) {
     hardwareStatus,
     selectedMode,
     sessionPhase,
+    startSession,
     state,
     summary,
   } = useFx2RealtimeSession();
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
 
   const averageBpm = summary.averageHeartRate || state.heartRate;
+  const canStartHardware =
+    selectedMode !== "demo" &&
+    (hardwareStatus === "idle" ||
+      hardwareStatus === "error" ||
+      hardwareStatus === "unsupported");
 
   return (
     <div className="min-h-screen bg-[#F4F7FB] text-[#111827] transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
@@ -191,14 +197,31 @@ export default function Layout({ children, title }: LayoutProps) {
           >
             {darkMode ? "라이트" : "다크"}
           </button>
-          <div className="hidden rounded-xl bg-[#F4F7FB] px-4 py-2 text-right dark:bg-slate-900 sm:block">
+          <button
+            type="button"
+            onClick={() => {
+              if (canStartHardware) {
+                void startSession();
+              }
+            }}
+            disabled={!canStartHardware}
+            className={`hidden rounded-xl px-4 py-2 text-right transition-colors duration-200 sm:block ${
+              canStartHardware
+                ? "bg-[#2563EB] text-white hover:opacity-90"
+                : "cursor-default bg-[#F4F7FB] dark:bg-slate-900"
+            }`}
+          >
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#6B7280] dark:text-slate-400">
               {selectedMode.toUpperCase()} · {sessionPhaseLabelMap[sessionPhase]}
             </p>
-            <p className="mt-0.5 text-sm font-medium text-[#111827] dark:text-white">
-              {hardwareLabelMap[hardwareStatus]}
+            <p
+              className={`mt-0.5 text-sm font-medium ${
+                canStartHardware ? "text-white" : "text-[#111827] dark:text-white"
+              }`}
+            >
+              {canStartHardware ? "다시 연결" : hardwareLabelMap[hardwareStatus]}
             </p>
-          </div>
+          </button>
         </div>
       </header>
 

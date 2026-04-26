@@ -249,7 +249,14 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   };
 
   const disconnectHardware = () => {
+    stopMockFeed();
     void hardwareRef.current.disconnect();
+    setSessionPhase("stopped");
+    setState((prev) => ({
+      ...prev,
+      connected: false,
+      logs: appendLog(prev.logs, "장치 연결을 해제했습니다.")
+    }));
   };
 
   const setSelectedMode = (mode: DeviceMode) => {

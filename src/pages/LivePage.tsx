@@ -120,7 +120,9 @@ export default function LivePage() {
     summary,
     selectedMode,
     sessionPhase,
+    hardwareStatus,
     hardwareDetail,
+    startSession,
     stopSession,
     disconnectHardware,
     pushManualUpdate,
@@ -244,6 +246,9 @@ export default function LivePage() {
 
   const isRunning = sessionPhase === "running";
   const isStopped = sessionPhase === "stopped";
+  const canReconnect =
+    selectedMode !== "demo" &&
+    (hardwareStatus === "idle" || hardwareStatus === "error");
 
   return (
     <>
@@ -332,10 +337,20 @@ export default function LivePage() {
               <button
                 type="button"
                 onClick={disconnectHardware}
-                className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                disabled={selectedMode !== "demo" && canReconnect}
+                className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 장치 연결 해제
               </button>
+              {canReconnect ? (
+                <button
+                  type="button"
+                  onClick={startSession}
+                  className="rounded-full bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white shadow-md transition-opacity duration-200 hover:opacity-90"
+                >
+                  다시 연결
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={stopSession}

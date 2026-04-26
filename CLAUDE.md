@@ -9,7 +9,7 @@ FX2 뇌파(EEG) 장치 출력을 Chrome 전용 실시간 웹 대시보드로 시
 ## 기술 스택
 - **프레임워크**: React 18 + TypeScript 5.6 + Vite
 - **스타일**: Tailwind CSS 3 (`dark:` class 방식 다크모드)
-- **차트**: lightweight-charts 5 (TradingView) + chart.js 4 (심박 추이용)
+- **차트**: uPlot (EEGChartV2 메인 EEG 차트) + lightweight-charts (LineChartCard 심박 추이)
 - **배포**: Netlify (`netlify.toml`, SPA redirect 설정됨)
 - **URL**: https://laxtha.netlify.app
 
@@ -25,11 +25,13 @@ src/
 │
 ├── types/
 │   ├── fx2.ts                  # Fx2State, Fx2IncomingMessage, DeviceMode 등 핵심 타입
+│   ├── eegRecorder.ts          # EEG 세션 녹화 타입 (EegSessionData, ExtWindowSeconds 등)
 │   └── web-apis.d.ts           # Web Serial / Web Bluetooth 타입 선언
 │
 ├── lib/
-│   └── fx2Realtime.ts          # 순수 함수 계층: 상태 생성/업데이트/요약/파싱
-│                               # MAX_CHART_POINTS=3000, LOG_HISTORY_LIMIT=40
+│   ├── fx2Realtime.ts          # 순수 함수 계층: 상태 생성/업데이트/요약/파싱
+│   │                           # MAX_CHART_POINTS=3000, LOG_HISTORY_LIMIT=40
+│   └── eegSessionRecorder.ts   # EegSessionRecorder 클래스: 데이터 수집/내보내기
 │
 ├── services/
 │   └── fx2Hardware.ts          # Fx2HardwareService: BLE / UART 연결, 이벤트 emit
@@ -40,14 +42,15 @@ src/
 │   └── ThemeContext.tsx        # 다크모드 (localStorage + .dark 클래스)
 │
 ├── hooks/
-│   └── useFx2Realtime.ts       # (현재 미사용, context에 통합됨)
+│   ├── useFx2Realtime.ts       # (현재 미사용, context에 통합됨)
+│   └── useEegSessionRecorder.ts # EEG 세션 녹화 훅
 │
 ├── components/
-│   ├── Layout.tsx              # 사이드바 + 햄버거 메뉴 (모바일)
-│   ├── EEGChartV2.tsx          # 메인 EEG 차트 (lightweight-charts, memo 적용)
-│   │                           # ResizeObserver cleanup 구현됨
-│   │                           # 윈도우(10/30/60s), 일시정지, 줌/팬, Go Live
-│   ├── LineChartCard.tsx       # 심박 추이 차트 (chart.js - 계속 사용 중)
+│   ├── Layout.tsx              # 사이드바 + 햄버거 메뉴 (모바일) + 토스트 알림 시스템
+│   ├── EEGChartV2.tsx          # 메인 EEG 차트 (uPlot, memo 적용, ResizeObserver cleanup)
+│   │                           # 윈도우 10/30/60/120/300s (더보기 드롭다운)
+│   │                           # 일시정지, 줌/팬, Go Live, PNG 캡처
+│   ├── LineChartCard.tsx       # 심박 추이 차트 (lightweight-charts)
 │   ├── HiddenDemoPanel.tsx     # 시연용 슬라이드 패널 (preset 적용)
 │   └── StatusCard.tsx          # (현재 미사용, LivePage에서 인라인 처리)
 │
@@ -102,10 +105,10 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-04-25 기준)
+## 현재 상태 (2026-04-26 기준)
 
 ### 완료
-- [x] EEGChartV2 (lightweight-charts, 크로스헤어/줌/팬/일시정지/Go Live)
+- [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
 - [x] 3존 레이아웃 (상태바 + 메인차트 + 하단 보조)
 - [x] 다크모드 전역 (ThemeContext, localStorage)
 - [x] 한국어 UI 통일
@@ -114,18 +117,18 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 다운샘플링 (10s→50pt / 30s→150pt / 60s→300pt)
 - [x] TypeScript 오류 0개, 빌드 성공
 - [x] netlify.toml SPA redirect
+- [x] UART 16ms throttle (scheduleUartFlush, fx2Hardware.ts)
+- [x] 시작 버튼 로딩 스피너 (isConnecting 상태, HomePage.tsx)
+- [x] 버튼 툴바 통합 (더보기 드롭다운, EEGChartV2.tsx)
+- [x] 토스트 알림 (ToastItem/addToast, Layout.tsx)
+- [x] LineChartCard → lightweight-charts 마이그레이션 완료
+- [x] EEG 세션 녹화 기능 (EegSessionRecorder, useEegSessionRecorder)
 
 ### 미완료 (v3 계획)
 - [ ] **[성능] summarizeFx2State()** — 매 state 업데이트마다 3000개 배열에 Math.max 실행
-      위치: `lib/fx2Realtime.ts:420-474`, 컨텍스트: `context/Fx2RealtimeContext.tsx:241`
-      해결: `useMemo`로 분리하거나 stats에서 점진적 계산
-- [ ] **[성능] 고주파 UART 데이터 throttle** — 현재 rate 제한 없음
-      해결: `useRef`로 throttle 16ms 적용
-- [ ] **[코드] LineChartCard → lightweight-charts 마이그레이션** — chart.js 의존성 제거
-- [ ] **[UX] 시작 버튼 로딩 스피너** — HomePage.tsx:189, 현재 클릭 즉시 navigate
-- [ ] **[UX] 버튼 툴바 통합** — 10s/30s/60s + ⏸ + CH1/CH2 + 다운로드를 하나의 toolbox로
+      위치: `lib/fx2Realtime.ts:420-474`, 컨텍스트: `context/Fx2RealtimeContext.tsx:274`
+      해결: stats에서 점진적 계산 (useMemo는 이미 적용됨)
 - [ ] **[기능] 동영상 저장** — MediaRecorder + canvas.captureStream(30fps)
-- [ ] **[기능] 토스트 알림** — 연결 성공/실패/재연결
 - [ ] **[배포] Netlify 재배포** — git push origin main 으로 자동 배포
 - [ ] **[하드웨어] UART 실기기 테스트** — USB 연결 후 0-255 데이터 확인
 - [ ] **[하드웨어] BLE 테스트** — Android BLE 앱 빌드 후 HTTPS 환경에서 페어링

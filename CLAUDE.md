@@ -124,12 +124,10 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] LineChartCard → lightweight-charts 마이그레이션 완료
 - [x] EEG 세션 녹화 기능 (EegSessionRecorder, useEegSessionRecorder)
 - [x] 동영상 녹화 (MediaRecorder + canvas.captureStream(30fps), EEGChartV2.tsx)
+- [x] 재연결 오류 메시지 버그 수정 (readSerialLoop 의도적 cancel을 error로 처리하던 버그)
+- [x] summarizeFx2State() 성능 — state.stats 점진적 집계로 이미 최적화됨 (ch1Sum/ch2Sum/ch1PeakAbs 등)
 
 ### 미완료
-- [ ] **[성능] summarizeFx2State()** — 매 state 업데이트마다 3000개 배열에 Math.max 실행
-      위치: `lib/fx2Realtime.ts:420-474`, 컨텍스트: `context/Fx2RealtimeContext.tsx:274`
-      해결: stats에서 점진적 계산 (useMemo는 이미 적용됨)
-- [ ] **[배포] Netlify 재배포** — git push origin main 으로 자동 배포
 - [ ] **[하드웨어] UART 실기기 테스트** — USB 연결 후 0-255 데이터 확인
 - [ ] **[하드웨어] BLE 테스트** — Android BLE 앱 빌드 후 HTTPS 환경에서 페어링
 

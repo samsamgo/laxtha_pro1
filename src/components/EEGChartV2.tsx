@@ -278,7 +278,10 @@ function EEGChartV2({
   const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
   const [showLiveButton, setShowLiveButton] = useState(false);
   const [showMoreWindows, setShowMoreWindows] = useState(false);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const moreDropdownRef = useRef<HTMLDivElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
 
   const isUart = mode === "uart";
   const latestCh1 = ch1[ch1.length - 1];
@@ -351,6 +354,64 @@ function EEGChartV2({
     },
     [setVisibleRange]
   );
+
+  // Cleanup: stop recording on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  const toggleVideoRecording = useCallback(() => {
+    if (isRecordingVideo) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    const container = containerRef.current;
+    if (!container) return;
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+
+    const stream = canvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : MediaRecorder.isTypeSupported("video/webm")
+      ? "video/webm"
+      : "";
+
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    recordedChunksRef.current = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+      recordedChunksRef.current = [];
+
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const filename = `EEG_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.webm`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setIsRecordingVideo(false);
+    };
+
+    recorder.start(1000);
+    mediaRecorderRef.current = recorder;
+    setIsRecordingVideo(true);
+  }, [isRecordingVideo]);
 
   // Capture chart canvas as PNG
   const captureChart = useCallback(() => {
@@ -576,6 +637,19 @@ function EEGChartV2({
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${secondaryButtonClass}`}
               >
                 📷 차트 캡처
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleVideoRecording}
+                title={isRecordingVideo ? "녹화 중지 및 저장" : "동영상 녹화 시작"}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                  isRecordingVideo
+                    ? "animate-pulse bg-red-500 text-white"
+                    : secondaryButtonClass
+                }`}
+              >
+                {isRecordingVideo ? "⏹ 녹화 중지" : "⏺ 동영상 녹화"}
               </button>
 
               {isUart ? (

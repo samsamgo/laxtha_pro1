@@ -120,10 +120,7 @@ export default function LivePage() {
     summary,
     selectedMode,
     sessionPhase,
-    hardwareStatus,
     hardwareDetail,
-    startSession,
-    disconnectHardware,
     pushManualUpdate,
     applyPreset,
   } = useFx2RealtimeSession();
@@ -245,15 +242,6 @@ export default function LivePage() {
 
   const isRunning = sessionPhase === "running";
   const isStopped = sessionPhase === "stopped";
-  const canReconnect =
-    selectedMode !== "demo" &&
-    (hardwareStatus === "idle" || hardwareStatus === "error");
-  const canDisconnect =
-    selectedMode !== "demo" &&
-    (hardwareStatus === "requesting" ||
-      hardwareStatus === "connecting" ||
-      hardwareStatus === "connected");
-
   return (
     <>
       <div className="flex flex-col gap-5">
@@ -349,30 +337,6 @@ export default function LivePage() {
               <>
                 <span>·</span>
                 <span>{hardwareDetail}</span>
-              </>
-            ) : null}
-            {canDisconnect ? (
-              <>
-                <span>•</span>
-                <button
-                  type="button"
-                  onClick={disconnectHardware}
-                  className="font-semibold text-[#6B7280] underline-offset-4 hover:text-[#111827] hover:underline dark:text-slate-300 dark:hover:text-white"
-                >
-                  연결 해제
-                </button>
-              </>
-            ) : null}
-            {canReconnect ? (
-              <>
-                <span>•</span>
-                <button
-                  type="button"
-                  onClick={() => void startSession()}
-                  className="font-semibold text-[#2563EB] underline-offset-4 hover:underline dark:text-blue-300"
-                >
-                  다시 연결
-                </button>
               </>
             ) : null}
           </div>

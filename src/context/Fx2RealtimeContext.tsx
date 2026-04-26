@@ -35,7 +35,7 @@ interface Fx2RealtimeContextValue {
   hardwareStatus: Fx2HardwareStatus;
   hardwareDetail: string;
   setSelectedMode: (mode: DeviceMode) => void;
-  startSession: () => void;
+  startSession: () => Promise<void>;
   stopSession: () => void;
   disconnectHardware: () => void;
   pushManualUpdate: (patch: Partial<Fx2IncomingMessage>) => boolean;

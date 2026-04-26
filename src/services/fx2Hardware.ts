@@ -60,6 +60,8 @@ export class Fx2HardwareService {
 
   private serialPort: SerialPort | null = null;
 
+  private lastSerialPort: SerialPort | null = null;
+
   private serialReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   private serialAbort = false;
@@ -242,6 +244,7 @@ export class Fx2HardwareService {
       } catch {
         // Port closing can fail if the device was removed.
       }
+      this.lastSerialPort = this.serialPort;
       this.serialPort = null;
     }
 
@@ -303,6 +306,10 @@ export class Fx2HardwareService {
   }
 
   private async resolveUartPort() {
+    if (this.lastSerialPort) {
+      return this.lastSerialPort;
+    }
+
     const grantedPorts = await this.getGrantedTargetPorts();
 
     if (grantedPorts.length > 0) {
@@ -316,6 +323,7 @@ export class Fx2HardwareService {
     this.setStatus("connecting", `UART ${baudRate}bps connecting`);
     await port.open({ baudRate, dataBits: 8, stopBits: 1, parity: "none" });
     this.serialPort = port;
+    this.lastSerialPort = port;
     this.serialAbort = false;
     void this.readSerialLoop();
   }

@@ -229,13 +229,18 @@ export class Fx2HardwareService {
     this.serialAbort = true;
 
     if (this.serialReader) {
+      const reader = this.serialReader;
+      this.serialReader = null; // clear before cancel so readSerialLoop.finally skips it
       try {
-        await this.serialReader.cancel();
+        await reader.cancel();
       } catch {
         // Reader cancellation can fail if the stream is already closed.
       }
-      this.serialReader.releaseLock();
-      this.serialReader = null;
+      try {
+        reader.releaseLock();
+      } catch {
+        // Already released by readSerialLoop's finally block.
+      }
     }
 
     if (this.serialPort) {
@@ -349,12 +354,12 @@ export class Fx2HardwareService {
   }
 
   private handleBluetoothDisconnect = () => {
-    if (this.isIntentionalDisconnect) {
-      this.setStatus("idle", "Bluetooth disconnected.");
+    // bleDevice is null after intentional disconnect() — treat that as intentional too
+    if (this.isIntentionalDisconnect || !this.bleDevice) {
       return;
     }
 
-    this.bleDevice?.removeEventListener(
+    this.bleDevice.removeEventListener(
       "gattserverdisconnected",
       this.handleBluetoothDisconnect
     );
@@ -496,12 +501,15 @@ export class Fx2HardwareService {
         this.scheduleUartFlush();
       }
     } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "UART read loop stopped.";
-      this.setStatus("error", detail);
+      // serialAbort=true means we cancelled intentionally — not an error
+      if (!this.serialAbort) {
+        const detail =
+          error instanceof Error ? error.message : "UART read loop stopped.";
+        this.setStatus("error", detail);
+      }
     } finally {
       if (this.serialReader) {
-        this.serialReader.releaseLock();
+        try { this.serialReader.releaseLock(); } catch { /* ignore */ }
         this.serialReader = null;
       }
 

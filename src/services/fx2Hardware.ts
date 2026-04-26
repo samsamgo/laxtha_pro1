@@ -83,6 +83,10 @@ export class Fx2HardwareService {
 
   private uartReconnectEnabled = false;
 
+  private uartThrottleId: number | null = null;
+
+  private pendingUartBytes: string[] = [];
+
   constructor() {
     if (typeof navigator !== "undefined" && navigator.serial) {
       navigator.serial.addEventListener("connect", this.handleSerialConnect);
@@ -241,11 +245,28 @@ export class Fx2HardwareService {
       this.serialPort = null;
     }
 
+    if (this.uartThrottleId !== null) {
+      clearTimeout(this.uartThrottleId);
+      this.uartThrottleId = null;
+    }
+
+    this.pendingUartBytes = [];
     this.bleBuffer = "";
     this.serialBuffer = "";
     this.uartReconnectEnabled = false;
     this.isIntentionalDisconnect = false;
     this.setStatus("idle");
+  }
+
+  private scheduleUartFlush() {
+    if (this.uartThrottleId !== null) return;
+    this.uartThrottleId = window.setTimeout(() => {
+      this.uartThrottleId = null;
+      const bytes = this.pendingUartBytes.splice(0);
+      for (const raw of bytes) {
+        this.emit({ type: "packet", mode: "uart", raw });
+      }
+    }, 16);
   }
 
   private setStatus(status: Fx2HardwareStatus, detail = "") {
@@ -462,8 +483,9 @@ export class Fx2HardwareService {
         }
 
         for (const byteValue of result.value) {
-          this.emit({ type: "packet", mode: "uart", raw: String(byteValue) });
+          this.pendingUartBytes.push(String(byteValue));
         }
+        this.scheduleUartFlush();
       }
     } catch (error) {
       const detail =

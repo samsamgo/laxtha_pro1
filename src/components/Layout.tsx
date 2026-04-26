@@ -1,7 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
+
+interface ToastItem {
+  id: number;
+  message: string;
+  type: "success" | "error" | "info";
+}
+
+let toastCounter = 0;
 
 const navItems = [
   { to: "/", label: "홈" },
@@ -82,6 +90,33 @@ export default function Layout({ children, title }: LayoutProps) {
     summary,
   } = useFx2RealtimeSession();
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const prevStatusRef = useRef<typeof hardwareStatus | null>(null);
+
+  const addToast = (message: string, type: ToastItem["type"]) => {
+    const id = ++toastCounter;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  };
+
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = hardwareStatus;
+    if (prev === null || prev === hardwareStatus) return;
+
+    if (hardwareStatus === "connected") {
+      addToast("장치 연결됨", "success");
+    } else if (hardwareStatus === "error") {
+      addToast("장치 오류 발생", "error");
+    } else if (hardwareStatus === "unsupported") {
+      addToast("브라우저가 이 기능을 지원하지 않습니다", "error");
+    } else if (hardwareStatus === "idle" && (prev === "connected" || prev === "connecting")) {
+      addToast("장치 연결 해제됨", "info");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hardwareStatus]);
 
   const averageBpm = summary.averageHeartRate || state.heartRate;
   const canStartHardware =
@@ -267,6 +302,25 @@ export default function Layout({ children, title }: LayoutProps) {
           {children}
         </div>
       </main>
+
+      {toasts.length > 0 ? (
+        <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-2 lg:bottom-6">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ${
+                toast.type === "success"
+                  ? "bg-emerald-500 text-white"
+                  : toast.type === "error"
+                  ? "bg-red-500 text-white"
+                  : "bg-slate-700 text-white"
+              }`}
+            >
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <nav className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-24px)] -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900 lg:hidden">
         <div className="grid grid-cols-3 gap-2">

@@ -133,7 +133,7 @@ export default function Layout({ children, title }: LayoutProps) {
   const canControlHardware = canDisconnectHardware || canStartHardware;
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] text-[#111827] transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#F4F7FB] text-[#111827] transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       <aside className="fixed left-0 top-0 z-30 hidden h-full w-60 flex-col bg-[#0F172A] lg:flex">
         <div className="flex h-20 flex-shrink-0 items-center gap-3 border-b border-[#1E293B] px-5">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-xs font-bold text-white">

@@ -52,10 +52,10 @@ export class EegSessionRecorder {
   exportCsv(): void {
     if (this.samples.length === 0) return;
 
-    const header = "timestamp,elapsed_ms,ch1,ch2,bpm,wear,signal,mode";
+    const header = "timestamp,elapsed_ms,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,wear,signal,mode";
     const rows = this.samples.map(
       (s) =>
-        `${s.timestamp},${s.elapsedMs},${s.ch1},${s.ch2},${s.bpm},${s.wear},${s.signal},${s.mode}`
+        `${s.timestamp},${s.elapsedMs},${s.ch1.toFixed(4)},${s.ch2.toFixed(4)},${s.bpm},${s.ppg.toFixed(4)},${s.sdppg.toFixed(4)},${s.rrInterval},${s.wear},${s.signal},${s.mode}`
     );
     const csv = [header, ...rows].join("\n");
 
@@ -78,7 +78,7 @@ export class EegSessionRecorder {
       startedAt: new Date(startTs).toISOString(),
       endedAt: new Date(endTs).toISOString(),
       durationMs: endTs - startTs,
-      channels: ["ch1", "ch2"],
+      channels: ["ch1_uv", "ch2_uv", "bpm", "ppg", "sdppg", "rr_interval_ms"],
       sampleCount: this.samples.length,
       samples: this.samples,
     };

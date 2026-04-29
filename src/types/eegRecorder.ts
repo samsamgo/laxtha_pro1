@@ -6,6 +6,9 @@ export interface EegSample {
   ch1: number;
   ch2: number;
   bpm: number;
+  ppg: number;
+  sdppg: number;
+  rrInterval: number;  // ms, 0 if unavailable
   wear: WearStatus;
   signal: SignalStatus;
   mode: DeviceMode;

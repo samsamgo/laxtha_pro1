@@ -1,4 +1,4 @@
-import type { DeviceMode } from "../types/fx2";
+import type { DeviceMode, Fx2BinaryFrame } from "../types/fx2";
 
 export type Fx2HardwareMode = Extract<DeviceMode, "bluetooth" | "uart">;
 
@@ -12,7 +12,8 @@ export type Fx2HardwareStatus =
 
 export type Fx2HardwareEvent =
   | { type: "status"; status: Fx2HardwareStatus; detail?: string }
-  | { type: "packet"; mode: Fx2HardwareMode; raw: string };
+  | { type: "packet"; mode: "bluetooth"; raw: string }
+  | { type: "packet"; mode: "uart"; frame: Fx2BinaryFrame };
 
 interface BluetoothConnectOptions {
   serviceUuid?: BluetoothServiceUUID;
@@ -68,8 +69,6 @@ export class Fx2HardwareService {
 
   private bleBuffer = "";
 
-  private serialBuffer = "";
-
   private isIntentionalDisconnect = false;
 
   private reconnectTimeoutId: number | null = null;
@@ -85,9 +84,7 @@ export class Fx2HardwareService {
 
   private uartReconnectEnabled = false;
 
-  private uartThrottleId: number | null = null;
-
-  private pendingUartBytes: string[] = [];
+  private binaryBuffer: number[] = [];
 
   constructor() {
     if (typeof navigator !== "undefined" && navigator.serial) {
@@ -253,28 +250,51 @@ export class Fx2HardwareService {
       this.serialPort = null;
     }
 
-    if (this.uartThrottleId !== null) {
-      clearTimeout(this.uartThrottleId);
-      this.uartThrottleId = null;
-    }
-
-    this.pendingUartBytes = [];
+    this.binaryBuffer = [];
     this.bleBuffer = "";
-    this.serialBuffer = "";
     this.uartReconnectEnabled = false;
     this.isIntentionalDisconnect = false;
     this.setStatus("idle");
   }
 
-  private scheduleUartFlush() {
-    if (this.uartThrottleId !== null) return;
-    this.uartThrottleId = window.setTimeout(() => {
-      this.uartThrottleId = null;
-      const bytes = this.pendingUartBytes.splice(0);
-      for (const raw of bytes) {
-        this.emit({ type: "packet", mode: "uart", raw });
+  private parseBinaryFrame(bytes: number[]): Fx2BinaryFrame {
+    // bytes[0]=0xFF, bytes[1]=0xFE (sync, already verified by processBinaryBuffer)
+    const readRaw = (hi: number, lo: number) => (hi & 0x7f) * 256 + lo;
+    return {
+      ppd: bytes[2] === 1,
+      pud0: bytes[3],
+      pc: bytes[4],
+      bpm: bytes[5],
+      pcd: bytes[6],
+      electrodeStatus: bytes[7],
+      ch1Raw: readRaw(bytes[8], bytes[9]),
+      ch2Raw: readRaw(bytes[10], bytes[11]),
+      ch3Raw: readRaw(bytes[12], bytes[13]),
+      ch4Raw: readRaw(bytes[14], bytes[15]),
+      ch5Raw: readRaw(bytes[16], bytes[17]),
+      ch6Raw: readRaw(bytes[18], bytes[19]),
+    };
+  }
+
+  private processBinaryBuffer(): void {
+    while (this.binaryBuffer.length >= 20) {
+      const syncIdx = this.binaryBuffer.indexOf(0xff);
+      if (syncIdx === -1) {
+        this.binaryBuffer = [];
+        return;
       }
-    }, 16);
+      if (syncIdx > 0) {
+        this.binaryBuffer.splice(0, syncIdx);
+      }
+      if (this.binaryBuffer.length < 20) break;
+      if (this.binaryBuffer[1] !== 0xfe) {
+        // Not a valid frame start — skip one byte and retry
+        this.binaryBuffer.splice(0, 1);
+        continue;
+      }
+      const frameBytes = this.binaryBuffer.splice(0, 20);
+      this.emit({ type: "packet", mode: "uart", frame: this.parseBinaryFrame(frameBytes) });
+    }
   }
 
   private setStatus(status: Fx2HardwareStatus, detail = "") {
@@ -333,23 +353,15 @@ export class Fx2HardwareService {
     void this.readSerialLoop();
   }
 
-  private flushBuffer(mode: Fx2HardwareMode, chunk: string) {
-    const currentBuffer = mode === "bluetooth" ? this.bleBuffer : this.serialBuffer;
-    const nextBuffer = `${currentBuffer}${chunk}`;
+  private flushBleBuffer(chunk: string) {
+    const nextBuffer = `${this.bleBuffer}${chunk}`;
     const lines = nextBuffer.split(/\r?\n/);
-    const remainder = lines.pop() ?? "";
-
-    if (mode === "bluetooth") {
-      this.bleBuffer = remainder;
-    } else {
-      this.serialBuffer = remainder;
-    }
-
+    this.bleBuffer = lines.pop() ?? "";
     lines
       .map((line) => line.trim())
       .filter(Boolean)
       .forEach((line) => {
-        this.emit({ type: "packet", mode, raw: line });
+        this.emit({ type: "packet", mode: "bluetooth", raw: line });
       });
   }
 
@@ -443,7 +455,7 @@ export class Fx2HardwareService {
     }
 
     const chunk = new TextDecoder().decode(value.buffer);
-    this.flushBuffer("bluetooth", chunk);
+    this.flushBleBuffer(chunk);
   };
 
   private handleSerialConnect = () => {
@@ -496,9 +508,9 @@ export class Fx2HardwareService {
         }
 
         for (const byteValue of result.value) {
-          this.pendingUartBytes.push(String(byteValue));
+          this.binaryBuffer.push(byteValue);
         }
-        this.scheduleUartFlush();
+        this.processBinaryBuffer();
       }
     } catch (error) {
       // serialAbort=true means we cancelled intentionally — not an error

@@ -67,22 +67,37 @@ src/
 ```
 Demo:   setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
 BLE:    Web Bluetooth notify → parseHardwarePayload() → applyIncomingMessage() → setState
-UART:   Web Serial readline → parseHardwarePayload() → applyIncomingMessage() → setState
+UART:   Web Serial binary → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
 
-Fx2State 배열 상한: ch1/ch2/timestamps/ppg = 3000pt, heartRateHistory = 180pt, logs = 40건
+Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 3000pt, heartRateHistory = 180pt, logs = 40건
 ```
 
 ---
 
 ## 패킷 포맷
 
-**BLE/Demo (JSON)**
+**UART — LXSDF T2A 바이너리 20바이트 프레임** (COM15, 115200 8N1, 250Hz)
+```
+[0]  0xFF  [1]  0xFE  — 동기 헤더
+[2]  PPD              — 0=대기/충전, 1=측정모드 (PPD=1일 때만 유효 신호)
+[3]  PUD0             — bit7=심박이벤트, bit6=착용, bit5=전극연결, bit4=배터리, bit2=PPG정상
+[4]  PC               — 0~31 순환 카운터
+[5]  BPM              — 심박수
+[6]  PCD              — PC에 따라 배터리/포화/펌웨어 등 상태값
+[7]  전극상태          — bit5=CH1전극, bit4=CH2전극, bit3=REF전극
+[8..9]   CH1 좌뇌 EEG
+[10..11] CH2 우뇌 EEG
+[12..13] CH3 Power Spectrum ×10 (2.048s마다 갱신)
+[14..15] CH4 PPG
+[16..17] CH5 sdPPG
+[18..19] CH6 RR 간격 ms
+```
+신호 변환: `EEG_μV = (raw - 16384) × 0.03606`  (raw = (high & 0x7F) × 256 + low, 15비트)
+
+**BLE/Demo (JSON)** — Demo 모드 및 BLE 테스트용
 ```json
 {"ch1": 0.82, "ch2": 0.74, "bpm": 72, "wear": "worn", "signal": "good", "ts": 1713180000}
 ```
-또는 comma-separated: `ch1,ch2,bpm,wearing,signalQuality,connection,noise[,timestamp]`
-
-**UART**: 0-255 정수 한 줄, ch1=ch2=동일값, stepped line 모드
 
 ---
 
@@ -105,7 +120,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-04-26 기준)
+## 현재 상태 (2026-04-29 기준)
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -117,19 +132,19 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 다운샘플링 (10s→50pt / 30s→150pt / 60s→300pt)
 - [x] TypeScript 오류 0개, 빌드 성공
 - [x] netlify.toml SPA redirect
-- [x] UART 16ms throttle (scheduleUartFlush, fx2Hardware.ts)
 - [x] 시작 버튼 로딩 스피너 (isConnecting 상태, HomePage.tsx)
 - [x] 버튼 툴바 통합 (더보기 드롭다운, EEGChartV2.tsx)
 - [x] 토스트 알림 (ToastItem/addToast, Layout.tsx)
 - [x] LineChartCard → lightweight-charts 마이그레이션 완료
 - [x] EEG 세션 녹화 기능 (EegSessionRecorder, useEegSessionRecorder)
 - [x] 동영상 녹화 (MediaRecorder + canvas.captureStream(30fps), EEGChartV2.tsx)
-- [x] 재연결 오류 메시지 버그 수정 (readSerialLoop 의도적 cancel을 error로 처리하던 버그)
-- [x] summarizeFx2State() 성능 — state.stats 점진적 집계로 이미 최적화됨 (ch1Sum/ch2Sum/ch1PeakAbs 등)
+- [x] 재연결 오류 메시지 버그 수정
+- [x] summarizeFx2State() 성능 최적화 (점진적 집계)
+- [x] 바이너리 프로토콜 파서 (Fx2BinaryFrame, processBinaryBuffer, parseUartBinaryFrame)
+- [x] 6채널 데이터 타입 (EEG CH1/CH2 μV, PPG, sdPPG, RR 간격 ms, Power Spectrum)
 
 ### 미완료
-- [ ] **[하드웨어] UART 실기기 테스트** — USB 연결 후 0-255 데이터 확인
-- [ ] **[하드웨어] BLE 테스트** — Android BLE 앱 빌드 후 HTTPS 환경에서 페어링
+- [ ] **[하드웨어] UART COM15 실기기 테스트** — PPD=1 측정모드에서 20바이트 프레임 파싱 검증
 
 ---
 
@@ -153,7 +168,7 @@ git push origin main
 1. **Chrome / Edge 전용** — Web Serial, Web Bluetooth는 Firefox/Safari 미지원
 2. **HTTPS 필수** — Web Bluetooth는 localhost 또는 HTTPS에서만 작동
 3. **서버 없음** — 모든 통신은 브라우저 Web API 직접 사용
-4. **BLE UUID**: Service `12345678-1234-1234-1234-123456789abc`, Char `...abd`
+4. **COM15 Bluetooth SPP**: neuroNicle FX2는 BLE가 아닌 Bluetooth Classic SPP로 연결 → Windows가 COM 포트로 노출 (장치관리자에서 확인)
 
 ---
 

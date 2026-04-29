@@ -1,5 +1,6 @@
 import type {
   DeviceMode,
+  Fx2BinaryFrame,
   Fx2IncomingMessage,
   Fx2SessionStats,
   Fx2State,
@@ -135,6 +136,8 @@ export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
     ch2: [],
     timestamps: [],
     ppg: [],
+    sdppg: [],
+    rrInterval: [],
     heartRateHistory: [],
     signalQualityHistory: [],
     sessionSeconds: 0,
@@ -169,24 +172,6 @@ export const parseHardwarePayload = (
 
   if (!trimmed) {
     return null;
-  }
-
-  if (mode === "uart") {
-    const byteValue = parseInt(trimmed, 10);
-
-    if (Number.isInteger(byteValue) && byteValue >= 0 && byteValue <= 255) {
-      return {
-        mode: "uart",
-        ch1: byteValue,
-        ch2: byteValue,
-        bpm: fallbackState.heartRate ?? 72,
-        wearing: true,
-        signalQuality: 88,
-        connection: "connected",
-        noise: false,
-        timestamp: Date.now(),
-      };
-    }
   }
 
   const fallbackMessage = buildMessageFromState(fallbackState, { mode });
@@ -305,6 +290,53 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
     connection: "connected",
     noise,
     timestamp,
+    ppg: Math.sin(drift * 1.1) * 0.5 + (Math.random() - 0.5) * 0.1,
+    sdppg: Math.cos(drift * 1.3) * 0.3 + (Math.random() - 0.5) * 0.05,
+    rrInterval: bpm > 0 ? Math.round(60000 / bpm) : 833,
+  };
+};
+
+const EEG_CENTER = 16384;
+const EEG_SCALE = 0.03606;
+
+export const parseUartBinaryFrame = (
+  frame: Fx2BinaryFrame,
+  fallbackState: Fx2State
+): Fx2IncomingMessage | null => {
+  if (!frame.ppd) {
+    return null; // PPD=0: standby/charging mode — discard silently
+  }
+
+  const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
+  const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
+  const ppg = (frame.ch4Raw - EEG_CENTER) * EEG_SCALE;
+  const sdppg = (frame.ch5Raw - EEG_CENTER) * EEG_SCALE;
+  const rrInterval = frame.ch6Raw;
+  const powerSpectrum = frame.ch3Raw / 10;
+
+  const wearing = Boolean(frame.pud0 & 0x40); // bit6 = sensor wearing
+  const ppgOk = Boolean(frame.pud0 & 0x04);   // bit2 = PPG signal ok
+  const noise = !ppgOk;
+  const bpm = frame.bpm > 0
+    ? clampNumber(frame.bpm, 30, 220)
+    : fallbackState.heartRate;
+  const signalQuality = wearing && ppgOk ? 88 : 42;
+
+  return {
+    mode: "uart",
+    ch1,
+    ch2,
+    bpm,
+    wearing,
+    signalQuality,
+    connection: "connected",
+    noise,
+    timestamp: Date.now(),
+    ppg,
+    sdppg,
+    rrInterval,
+    powerSpectrum,
+    ppd: true,
   };
 };
 
@@ -328,7 +360,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     (prev.stats.averageSignalQuality * prev.stats.sampleCount +
       message.signalQuality) /
     nextSampleCount;
-  const ppgValue = message.bpm / 100 + (message.signalQuality - 60) / 500;
+  const ppgValue = message.ppg ?? (message.bpm / 100 + (message.signalQuality - 60) / 500);
+  const sdppgValue = message.sdppg ?? 0;
+  const rrIntervalValue = message.rrInterval ?? 0;
 
   return {
     ...prev,
@@ -343,6 +377,10 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     ch2: appendValue(prev.ch2, message.ch2, MAX_CHART_POINTS),
     timestamps: appendValue(prev.timestamps, nextTimestamp, MAX_CHART_POINTS),
     ppg: appendValue(prev.ppg, ppgValue, MAX_CHART_POINTS),
+    sdppg: appendValue(prev.sdppg, sdppgValue, MAX_CHART_POINTS),
+    rrInterval: rrIntervalValue > 0
+      ? appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS)
+      : prev.rrInterval,
     heartRateHistory: appendValue(prev.heartRateHistory, message.bpm, METRIC_HISTORY_LIMIT),
     signalQualityHistory: appendValue(
       prev.signalQualityHistory,

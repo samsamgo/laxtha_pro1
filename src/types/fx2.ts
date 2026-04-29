@@ -2,6 +2,21 @@ export type DeviceMode = "demo" | "bluetooth" | "uart";
 export type WearStatus = "worn" | "unstable" | "not_worn";
 export type SignalStatus = "good" | "normal" | "poor";
 
+export interface Fx2BinaryFrame {
+  ppd: boolean;
+  pud0: number;
+  pc: number;
+  bpm: number;
+  pcd: number;
+  electrodeStatus: number;
+  ch1Raw: number;
+  ch2Raw: number;
+  ch3Raw: number;
+  ch4Raw: number;
+  ch5Raw: number;
+  ch6Raw: number;
+}
+
 export interface Fx2IncomingMessage {
   mode: DeviceMode;
   ch1: number;
@@ -12,6 +27,11 @@ export interface Fx2IncomingMessage {
   connection: "connected" | "disconnected";
   noise: boolean;
   timestamp: number;
+  ppg?: number;
+  sdppg?: number;
+  rrInterval?: number;
+  powerSpectrum?: number;
+  ppd?: boolean;
 }
 
 export interface Fx2SessionStats {
@@ -41,6 +61,8 @@ export interface Fx2State {
   ch2: number[];
   timestamps: number[];
   ppg: number[];
+  sdppg: number[];
+  rrInterval: number[];
   heartRateHistory: number[];
   signalQualityHistory: number[];
   sessionSeconds: number;

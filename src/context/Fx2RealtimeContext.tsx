@@ -15,6 +15,7 @@ import {
   createInitialFx2State,
   createMockMessage,
   parseHardwarePayload,
+  parseUartBinaryFrame,
   summarizeFx2State
 } from "../lib/fx2Realtime";
 import {
@@ -98,20 +99,21 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         return;
       }
 
-      const nextMessage = parseHardwarePayload(
-        event.raw,
-        event.mode,
-        stateRef.current
-      );
+      const nextMessage = event.mode === "uart"
+        ? parseUartBinaryFrame(event.frame, stateRef.current)
+        : parseHardwarePayload(event.raw, event.mode, stateRef.current);
 
       if (!nextMessage) {
-        setState((prev) => ({
-          ...prev,
-          logs: appendLog(
-            prev.logs,
-            `[${event.mode.toUpperCase()}] 수신 값을 해석하지 못했습니다: ${event.raw}`
-          ),
-        }));
+        // UART null = PPD=0 standby — silent discard (expected during charging)
+        if (event.mode !== "uart") {
+          setState((prev) => ({
+            ...prev,
+            logs: appendLog(
+              prev.logs,
+              `[${event.mode.toUpperCase()}] 수신 프레임을 해석하지 못했습니다.`
+            ),
+          }));
+        }
         return;
       }
 

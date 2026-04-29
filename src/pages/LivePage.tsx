@@ -202,6 +202,18 @@ export default function LivePage() {
       state.timestamps.length
     );
 
+    if (
+      pointCount === state.ch1.length &&
+      pointCount === state.ch2.length &&
+      pointCount === state.timestamps.length
+    ) {
+      return {
+        ch1: state.ch1,
+        ch2: state.ch2,
+        timestamps: state.timestamps,
+      };
+    }
+
     return {
       ch1: state.ch1.slice(-pointCount),
       ch2: state.ch2.slice(-pointCount),

@@ -1,5 +1,5 @@
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from "lightweight-charts";
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useFx2Theme } from "../context/ThemeContext";
 import type { DeviceMode } from "../types/fx2";
 
@@ -11,11 +11,40 @@ interface LineChartCardProps {
   mode?: DeviceMode;
 }
 
+const MINI_CHART_MAX_POINTS = 1200;
+
+const downsample = (values: number[], maxPoints: number) => {
+  if (values.length <= maxPoints) {
+    return values;
+  }
+
+  const step = Math.ceil(values.length / maxPoints);
+  const sampled: number[] = [];
+
+  for (let index = 0; index < values.length; index += step) {
+    sampled.push(values[index]);
+  }
+
+  const lastValue = values[values.length - 1];
+
+  if (sampled[sampled.length - 1] !== lastValue) {
+    sampled.push(lastValue);
+  }
+
+  return sampled;
+};
+
 function LineChartCard({ title, values, color, subtitle, mode }: LineChartCardProps) {
   const { darkMode } = useFx2Theme();
   const isUart = mode === "uart";
-  const safeValues = values.length > 0 ? values : [0];
-  const latestValue = safeValues[safeValues.length - 1] ?? 0;
+  const latestValue = values[values.length - 1] ?? 0;
+  const visibleValues = useMemo(() => {
+    if (values.length === 0) {
+      return [0];
+    }
+
+    return downsample(values, MINI_CHART_MAX_POINTS);
+  }, [values]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,7 +118,7 @@ function LineChartCard({ title, values, color, subtitle, mode }: LineChartCardPr
     const series = seriesRef.current;
     if (!series) return;
 
-    const data = safeValues.map((value, i) => ({
+    const data = visibleValues.map((value, i) => ({
       time: (i + 1) as UTCTimestamp,
       value,
     }));
@@ -103,7 +132,7 @@ function LineChartCard({ title, values, color, subtitle, mode }: LineChartCardPr
     }
 
     chartRef.current?.timeScale().fitContent();
-  }, [safeValues, isUart]);
+  }, [visibleValues, isUart]);
 
   return (
     <section className="fx2-card fx2-outline">

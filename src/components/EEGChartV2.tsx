@@ -165,14 +165,11 @@ const makeOptions = (
   width: number,
   height: number,
   theme: ChartTheme,
-  isUart: boolean,
   ch1Visible: boolean,
   ch2Visible: boolean,
   onScaleChange: (chart: uPlot) => void
 ): uPlot.Options => {
   const colors = THEME_COLORS[theme];
-  const steppedFn = uPlot.paths.stepped;
-  const linePath = isUart && steppedFn ? steppedFn({ align: 1 }) : undefined;
 
   return {
     width,
@@ -189,7 +186,7 @@ const makeOptions = (
     },
     scales: {
       x: { time: true },
-      y: isUart ? { auto: false, range: [0, 255] } : { auto: true },
+      y: { auto: true },
     },
     axes: [
       {
@@ -207,8 +204,7 @@ const makeOptions = (
         grid: { stroke: colors.grid, width: 1 },
         ticks: { show: false },
         border: { show: false },
-        values: (_chart, splits) =>
-          splits.map((v) => (isUart ? `${Math.round(v)}` : v.toFixed(2))),
+        values: (_chart, splits) => splits.map((v) => v.toFixed(2)),
       },
     ],
     series: [
@@ -219,9 +215,8 @@ const makeOptions = (
         show: ch1Visible,
         stroke: CH1_COLOR,
         width: 2,
-        paths: linePath,
         points: { show: false },
-        value: (_chart, v) => (isUart ? `${Math.round(v)}` : v.toFixed(2)),
+        value: (_chart, v) => v.toFixed(2),
       },
       {
         label: "CH2",
@@ -229,9 +224,8 @@ const makeOptions = (
         show: ch2Visible,
         stroke: CH2_COLOR,
         width: 2,
-        paths: linePath,
         points: { show: false },
-        value: (_chart, v) => (isUart ? `${Math.round(v)}` : v.toFixed(2)),
+        value: (_chart, v) => v.toFixed(2),
       },
     ],
     hooks: {
@@ -461,7 +455,14 @@ function EEGChartV2({
 
     const dataToRender = displayDataRef.current;
     const chart = new uPlot(
-      makeOptions(dimensions.width, dimensions.height, theme, isUart, ch1Visible, ch2Visible, syncLiveEdgeState),
+      makeOptions(
+        dimensions.width,
+        dimensions.height,
+        theme,
+        ch1Visible,
+        ch2Visible,
+        syncLiveEdgeState
+      ),
       dataToRender,
       container
     );

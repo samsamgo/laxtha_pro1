@@ -89,13 +89,16 @@ export default function HomePage() {
     return null;
   }, [bleSupported, selectedMode, serialSupported]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!selectedModeSupported) {
       return;
     }
 
-    startSession();
-    navigate("/live");
+    const started = await startSession();
+
+    if (started) {
+      navigate("/live");
+    }
   };
 
   return (

@@ -27,12 +27,8 @@ interface UartConnectOptions {
 const DEFAULT_BLE_SERVICE_UUID = "12345678-1234-1234-1234-123456789abc";
 const DEFAULT_BLE_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-123456789abd";
 const DEFAULT_UART_BAUD_RATE = 115200;
-const DEFAULT_UART_FILTERS: SerialPortFilter[] = [
-  {
-    usbVendorId: 0x0f1f,
-    usbProductId: 0x4e21,
-  },
-];
+// Empty filters = show all available ports (Bluetooth SPP COM ports have no USB VID/PID)
+const DEFAULT_UART_FILTERS: SerialPortFilter[] = [];
 
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY_MS = 2000;
@@ -107,10 +103,21 @@ export class Fx2HardwareService {
   }
 
   async connectBluetooth(options: BluetoothConnectOptions = {}) {
+    if (typeof navigator !== "undefined" && navigator.serial) {
+      this.setStatus(
+        "requesting",
+        "Select the OMC-M10 Bluetooth serial port."
+      );
+      return this.connectUart();
+    }
+
     await this.disconnect();
 
     if (typeof navigator === "undefined" || !("bluetooth" in navigator)) {
-      this.setStatus("unsupported", "This browser does not support Web Bluetooth.");
+      this.setStatus(
+        "unsupported",
+        "OMC-M10 uses Bluetooth SPP. Use Chrome or Edge with Web Serial support."
+      );
       return false;
     }
 
@@ -166,8 +173,6 @@ export class Fx2HardwareService {
   }
 
   async connectUart(options: UartConnectOptions = {}) {
-    await this.disconnect();
-
     if (typeof navigator === "undefined" || !("serial" in navigator)) {
       this.setStatus("unsupported", "This browser does not support Web Serial.");
       return false;
@@ -178,9 +183,11 @@ export class Fx2HardwareService {
 
       const baudRate = options.baudRate ?? DEFAULT_UART_BAUD_RATE;
       this.lastUartBaudRate = baudRate;
-      this.uartReconnectEnabled = true;
 
       const port = await this.resolveUartPort();
+      await this.disconnect();
+
+      this.uartReconnectEnabled = true;
       await this.openSerialPort(port, baudRate);
 
       this.setStatus("connected", `UART ${baudRate}bps streaming`);
@@ -308,6 +315,10 @@ export class Fx2HardwareService {
   }
 
   private matchesUartFilter(port: SerialPort) {
+    if (this.uartFilters.length === 0) {
+      return true;
+    }
+
     const info = port.getInfo();
 
     return this.uartFilters.some((filter) => {

@@ -36,7 +36,7 @@ interface Fx2RealtimeContextValue {
   hardwareStatus: Fx2HardwareStatus;
   hardwareDetail: string;
   setSelectedMode: (mode: DeviceMode) => void;
-  startSession: () => Promise<void>;
+  startSession: () => Promise<boolean>;
   stopSession: () => void;
   disconnectHardware: () => void;
   pushManualUpdate: (patch: Partial<Fx2IncomingMessage>) => boolean;
@@ -170,22 +170,24 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     if (!connected) {
       setSessionPhase("idle");
     }
+
+    return connected;
   };
 
   const startSession = async () => {
     stopMockFeed();
-    await hardwareRef.current.disconnect();
     resetState(selectedMode);
     setSessionPhase("running");
 
     if (selectedMode === "demo") {
+      await hardwareRef.current.disconnect();
       mockTimerRef.current = window.setInterval(() => {
         setState((prev) => applyIncomingMessage(createMockMessage(prev), prev));
       }, 1000);
-      return;
+      return true;
     }
 
-    await connectHardware(selectedMode);
+    return connectHardware(selectedMode);
   };
 
   const stopSession = () => {

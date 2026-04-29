@@ -22,6 +22,7 @@ interface BluetoothConnectOptions {
 
 interface UartConnectOptions {
   baudRate?: number;
+  forcePrompt?: boolean;
 }
 
 const DEFAULT_BLE_SERVICE_UUID = "12345678-1234-1234-1234-123456789abc";
@@ -108,7 +109,7 @@ export class Fx2HardwareService {
         "requesting",
         "Select the OMC-M10 Bluetooth serial port."
       );
-      return this.connectUart();
+      return this.connectUart({ forcePrompt: true });
     }
 
     await this.disconnect();
@@ -179,12 +180,10 @@ export class Fx2HardwareService {
     }
 
     try {
-      this.setStatus("requesting", "Select a UART port.");
-
       const baudRate = options.baudRate ?? DEFAULT_UART_BAUD_RATE;
       this.lastUartBaudRate = baudRate;
 
-      const port = await this.resolveUartPort();
+      const port = await this.resolveUartPort(Boolean(options.forcePrompt));
       await this.disconnect();
 
       this.uartReconnectEnabled = true;
@@ -341,9 +340,14 @@ export class Fx2HardwareService {
     return ports.filter((port) => this.matchesUartFilter(port));
   }
 
-  private async resolveUartPort() {
-    if (this.lastSerialPort) {
+  private async resolveUartPort(forcePrompt = false) {
+    if (!forcePrompt && this.lastSerialPort) {
       return this.lastSerialPort;
+    }
+
+    if (forcePrompt) {
+      this.setStatus("requesting", "Select OMC-M10, COM10, or Bluetooth serial port.");
+      return navigator.serial!.requestPort({ filters: this.uartFilters });
     }
 
     const grantedPorts = await this.getGrantedTargetPorts();
@@ -352,6 +356,7 @@ export class Fx2HardwareService {
       return grantedPorts[0];
     }
 
+    this.setStatus("requesting", "Select OMC-M10, COM10, or Bluetooth serial port.");
     return navigator.serial!.requestPort({ filters: this.uartFilters });
   }
 

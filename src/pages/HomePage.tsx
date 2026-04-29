@@ -71,7 +71,7 @@ export default function HomePage() {
 
   const selectedModeSupported =
     selectedMode === "demo" ||
-    (selectedMode === "bluetooth" ? bleSupported : serialSupported);
+    (selectedMode === "bluetooth" ? serialSupported : serialSupported);
 
   const isConnecting =
     selectedMode !== "demo" &&
@@ -79,7 +79,11 @@ export default function HomePage() {
 
   const unsupportedMessage = useMemo(() => {
     if (selectedMode === "bluetooth" && !bleSupported) {
-      return "이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
+      return "OMC-M10은 Bluetooth 직렬 장치입니다. Chrome 또는 Edge에서 Web Serial 권한으로 연결해 주세요.";
+    }
+
+    if (selectedMode === "bluetooth" && !serialSupported) {
+      return "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
     }
 
     if (selectedMode === "uart" && !serialSupported) {
@@ -125,7 +129,7 @@ export default function HomePage() {
             {modeCards.map((item) => {
               const active = item.key === selectedMode;
               const unsupported =
-                (item.key === "bluetooth" && !bleSupported) ||
+                (item.key === "bluetooth" && !serialSupported) ||
                 (item.key === "uart" && !serialSupported);
 
               return (
@@ -157,7 +161,7 @@ export default function HomePage() {
                   {unsupported ? (
                     <p className="mt-3 text-xs leading-5 text-[#EF4444]">
                       {item.key === "bluetooth"
-                        ? "Web Bluetooth 미지원 브라우저입니다."
+                        ? "Web Serial 미지원 브라우저입니다."
                         : "Web Serial 미지원 브라우저입니다."}
                     </p>
                   ) : null}

@@ -120,7 +120,10 @@ export default function LivePage() {
     summary,
     selectedMode,
     sessionPhase,
+    hardwareStatus,
     hardwareDetail,
+    startSession,
+    disconnectHardware,
     pushManualUpdate,
     applyPreset,
   } = useFx2RealtimeSession();
@@ -245,6 +248,18 @@ export default function LivePage() {
 
   const isRunning = sessionPhase === "running";
   const isStopped = sessionPhase === "stopped";
+  const hardwareBusy =
+    hardwareStatus === "requesting" || hardwareStatus === "connecting";
+  const hardwareConnected = hardwareStatus === "connected";
+  const handleOmcm10Connect = async () => {
+    if (hardwareConnected) {
+      disconnectHardware();
+      return;
+    }
+
+    await startSession("bluetooth");
+  };
+
   return (
     <>
       <div className="flex flex-col gap-5">
@@ -306,6 +321,25 @@ export default function LivePage() {
             </div>
 
             <div className="flex flex-wrap gap-2 2xl:justify-end">
+              <button
+                type="button"
+                onClick={handleOmcm10Connect}
+                disabled={hardwareBusy}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
+                  hardwareConnected
+                    ? "bg-[#EAF0F8] text-[#6B7280] hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300"
+                    : hardwareBusy
+                    ? "cursor-wait bg-gray-300 text-gray-600 dark:bg-slate-700 dark:text-slate-300"
+                    : "bg-[#2563EB] text-white hover:opacity-90"
+                }`}
+              >
+                {hardwareConnected
+                  ? "OMC-M10 연결 해제"
+                  : hardwareBusy
+                  ? "OMC-M10 연결 중..."
+                  : "OMC-M10 연결"}
+              </button>
+
               {/* REC indicator — visible while running */}
               {isRunning && recSummary.isRecording ? (
                 <div className="flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 dark:bg-red-500/10">

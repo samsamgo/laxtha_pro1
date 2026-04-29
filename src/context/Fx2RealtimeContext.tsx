@@ -36,7 +36,7 @@ interface Fx2RealtimeContextValue {
   hardwareStatus: Fx2HardwareStatus;
   hardwareDetail: string;
   setSelectedMode: (mode: DeviceMode) => void;
-  startSession: () => Promise<boolean>;
+  startSession: (modeOverride?: DeviceMode) => Promise<boolean>;
   stopSession: () => void;
   disconnectHardware: () => void;
   pushManualUpdate: (patch: Partial<Fx2IncomingMessage>) => boolean;
@@ -174,12 +174,15 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     return connected;
   };
 
-  const startSession = async () => {
+  const startSession = async (modeOverride?: DeviceMode) => {
+    const nextMode = modeOverride ?? selectedMode;
+
     stopMockFeed();
-    resetState(selectedMode);
+    setSelectedModeState(nextMode);
+    resetState(nextMode);
     setSessionPhase("running");
 
-    if (selectedMode === "demo") {
+    if (nextMode === "demo") {
       await hardwareRef.current.disconnect();
       mockTimerRef.current = window.setInterval(() => {
         setState((prev) => applyIncomingMessage(createMockMessage(prev), prev));
@@ -187,7 +190,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       return true;
     }
 
-    return connectHardware(selectedMode);
+    return connectHardware(nextMode);
   };
 
   const stopSession = () => {

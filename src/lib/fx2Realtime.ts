@@ -8,7 +8,7 @@ import type {
   WearStatus,
 } from "../types/fx2";
 
-export const MAX_CHART_POINTS = 3000;
+export const MAX_CHART_POINTS = 18000;
 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;

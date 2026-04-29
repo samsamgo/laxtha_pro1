@@ -40,16 +40,6 @@ const signalLabel = {
   poor: "부족",
 } as const;
 
-// Max points passed to chart per window — display buffer only, not recording
-const chartPointLimitMap: Record<ExtWindowSeconds, number> = {
-  5: 50,
-  10: 100,
-  30: 300,
-  60: 600,
-  120: 1200,
-  300: 3000,
-};
-
 function HeartIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
@@ -203,14 +193,13 @@ export default function LivePage() {
     [state.logs]
   );
 
-  // Display buffer — only recent window points, never full recording
+  // Pass the full retained buffer to EEGChartV2. It applies timestamp-based
+  // windowing and downsampling internally, so 30s/60s are real time windows.
   const chartSeries = useMemo(() => {
-    const pointLimit = chartPointLimitMap[windowSeconds];
     const pointCount = Math.min(
       state.ch1.length,
       state.ch2.length,
-      state.timestamps.length,
-      pointLimit
+      state.timestamps.length
     );
 
     return {
@@ -218,7 +207,10 @@ export default function LivePage() {
       ch2: state.ch2.slice(-pointCount),
       timestamps: state.timestamps.slice(-pointCount),
     };
-  }, [state.ch1, state.ch2, state.timestamps, windowSeconds]);
+  }, [state.ch1, state.ch2, state.timestamps]);
+
+  const latestRrInterval = state.rrInterval[state.rrInterval.length - 1] ?? 0;
+  const rrDerivedBpm = latestRrInterval > 0 ? Math.round(60000 / latestRrInterval) : 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -510,6 +502,31 @@ export default function LivePage() {
             subtitle={`평균 ${summary.averageHeartRate || state.heartRate} bpm · 안정도 ${summary.stabilityScore}%`}
             values={state.heartRateHistory}
             color="#2563EB"
+          />
+
+          <LineChartCard
+            title="PPG 추이"
+            subtitle={`최근 ${state.ppg[state.ppg.length - 1]?.toFixed(2) ?? "0.00"} · 맥파 원신호`}
+            values={state.ppg}
+            color="#10B981"
+          />
+
+          <LineChartCard
+            title="sdPPG 추이"
+            subtitle={`최근 ${state.sdppg[state.sdppg.length - 1]?.toFixed(2) ?? "0.00"} · 2차 미분 맥파`}
+            values={state.sdppg}
+            color="#F59E0B"
+          />
+
+          <LineChartCard
+            title="RR 간격"
+            subtitle={
+              latestRrInterval > 0
+                ? `최근 ${latestRrInterval} ms · 추정 ${rrDerivedBpm} bpm`
+                : "아직 유효한 RR 간격 없음"
+            }
+            values={state.rrInterval}
+            color="#8B5CF6"
           />
         </div>
       </div>

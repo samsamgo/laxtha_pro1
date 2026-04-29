@@ -30,11 +30,11 @@ src/
 │
 ├── lib/
 │   ├── fx2Realtime.ts          # 순수 함수 계층: 상태 생성/업데이트/요약/파싱
-│   │                           # MAX_CHART_POINTS=3000, LOG_HISTORY_LIMIT=40
+│   │                           # MAX_CHART_POINTS=18000, LOG_HISTORY_LIMIT=40
 │   └── eegSessionRecorder.ts   # EegSessionRecorder 클래스: 데이터 수집/내보내기
 │
 ├── services/
-│   └── fx2Hardware.ts          # Fx2HardwareService: BLE / UART 연결, 이벤트 emit
+│   └── fx2Hardware.ts          # Fx2HardwareService: OMC-M10 SPP(Web Serial) / UART / BLE fallback
 │
 ├── context/
 │   ├── Fx2RealtimeContext.tsx  # 전역 상태: 세션, 모드, 하드웨어 상태
@@ -50,7 +50,7 @@ src/
 │   ├── EEGChartV2.tsx          # 메인 EEG 차트 (uPlot, memo 적용, ResizeObserver cleanup)
 │   │                           # 윈도우 10/30/60/120/300s (더보기 드롭다운)
 │   │                           # 일시정지, 줌/팬, Go Live, PNG 캡처
-│   ├── LineChartCard.tsx       # 심박 추이 차트 (lightweight-charts)
+│   ├── LineChartCard.tsx       # 심박/PPG/sdPPG/RR 추이 차트 (lightweight-charts)
 │   ├── HiddenDemoPanel.tsx     # 시연용 슬라이드 패널 (preset 적용)
 │   └── StatusCard.tsx          # (현재 미사용, LivePage에서 인라인 처리)
 │
@@ -65,18 +65,19 @@ src/
 ## 데이터 흐름
 
 ```
-Demo:   setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
-BLE:    Web Bluetooth notify → parseHardwarePayload() → applyIncomingMessage() → setState
-UART:   Web Serial binary → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
+Demo:     setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
+OMC-M10:  Bluetooth SPP(COM10/AMP-SPP) → Web Serial → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
+UART:     Web Serial binary → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
+BLE:      Web Bluetooth notify → parseHardwarePayload() → applyIncomingMessage() → setState
 
-Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 3000pt, heartRateHistory = 180pt, logs = 40건
+Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 18000pt, heartRateHistory = 180pt, logs = 40건
 ```
 
 ---
 
 ## 패킷 포맷
 
-**UART — LXSDF T2A 바이너리 20바이트 프레임** (COM15, 115200 8N1, 250Hz)
+**OMC-M10 / UART — LXSDF T2A 바이너리 20바이트 프레임** (Bluetooth SPP COM10 또는 UART, 115200 8N1)
 ```
 [0]  0xFF  [1]  0xFE  — 동기 헤더
 [2]  PPD              — 0=대기/충전, 1=측정모드 (PPD=1일 때만 유효 신호)
@@ -94,7 +95,7 @@ Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 3000pt, heartR
 ```
 신호 변환: `EEG_μV = (raw - 16384) × 0.03606`  (raw = (high & 0x7F) × 256 + low, 15비트)
 
-**BLE/Demo (JSON)** — Demo 모드 및 BLE 테스트용
+**BLE/Demo (JSON)** — Demo 모드 및 BLE fallback 테스트용
 ```json
 {"ch1": 0.82, "ch2": 0.74, "bpm": 72, "wear": "worn", "signal": "good", "ts": 1713180000}
 ```
@@ -120,7 +121,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-04-29 기준)
+## 현재 상태 (2026-04-29 밤 기준)
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -129,7 +130,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 한국어 UI 통일
 - [x] 빈 상태 컴포넌트 (이벤트 로그)
 - [x] 모바일 햄버거 메뉴
-- [x] 다운샘플링 (10s→50pt / 30s→150pt / 60s→300pt)
+- [x] timestamp 기준 차트 윈도우 + uPlot 내부 downsampling
 - [x] TypeScript 오류 0개, 빌드 성공
 - [x] netlify.toml SPA redirect
 - [x] 시작 버튼 로딩 스피너 (isConnecting 상태, HomePage.tsx)
@@ -142,9 +143,14 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] summarizeFx2State() 성능 최적화 (점진적 집계)
 - [x] 바이너리 프로토콜 파서 (Fx2BinaryFrame, processBinaryBuffer, parseUartBinaryFrame)
 - [x] 6채널 데이터 타입 (EEG CH1/CH2 μV, PPG, sdPPG, RR 간격 ms, Power Spectrum)
+- [x] OMC-M10 Bluetooth SPP 연결 (Web Serial 포트 프롬프트, COM10/AMP-SPP)
+- [x] `/live`의 OMC-M10 연결/해제 버튼
+- [x] PPG/sdPPG/RR 추이 카드 표시
+- [x] CSV/JSON에 PPG/sdPPG/RR 포함
 
 ### 미완료
-- [ ] **[하드웨어] UART COM15 실기기 테스트** — PPD=1 측정모드에서 20바이트 프레임 파싱 검증
+- [ ] **[하드웨어] OMC-M10 실데이터 의미 검증** — 115200 baud, `0xFF 0xFE` 헤더, PPD=1, PUD0 비트, RR 간격 해석 확인
+- [ ] **[UI] 남은 한글/문서 표현 정리** — 화면 우선, 문서는 Claude 인수인계 기준으로 계속 업데이트
 
 ---
 
@@ -168,7 +174,7 @@ git push origin main
 1. **Chrome / Edge 전용** — Web Serial, Web Bluetooth는 Firefox/Safari 미지원
 2. **HTTPS 필수** — Web Bluetooth는 localhost 또는 HTTPS에서만 작동
 3. **서버 없음** — 모든 통신은 브라우저 Web API 직접 사용
-4. **COM15 Bluetooth SPP**: neuroNicle FX2는 BLE가 아닌 Bluetooth Classic SPP로 연결 → Windows가 COM 포트로 노출 (장치관리자에서 확인)
+4. **OMC-M10 Bluetooth SPP**: OMC-M10은 BLE가 아닌 Bluetooth Classic SPP로 연결 → Windows에서 COM 포트로 노출됨. 현재 확인 포트는 COM10/AMP-SPP.
 
 ---
 

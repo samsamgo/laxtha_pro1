@@ -71,7 +71,7 @@ export default function HomePage() {
 
   const selectedModeSupported =
     selectedMode === "demo" ||
-    (selectedMode === "bluetooth" ? serialSupported : serialSupported);
+    serialSupported;
 
   const isConnecting =
     selectedMode !== "demo" &&
@@ -184,7 +184,7 @@ export default function HomePage() {
             {selectedMode === "demo"
               ? "브라우저 내부 generator가 1초 간격으로 데모 신호를 보냅니다."
               : selectedMode === "bluetooth"
-              ? "Bluetooth 권한 승인 후 FX2 BLE 신호를 직접 수신합니다."
+              ? "OMC-M10 Bluetooth 직렬 포트를 Web Serial로 엽니다."
               : "UART 권한 승인 후 0-255 바이너리 값을 단계형 차트로 표시합니다."}
           </p>
           {hardwareDetail ? (

@@ -29,15 +29,15 @@ const modeCards: Array<{
   },
   {
     key: "bluetooth",
-    title: "Bluetooth",
-    body: "Web Bluetooth API로 FX2 장치에서 JSON 신호를 직접 수신합니다.",
-    badge: "Chrome / Edge",
+    title: "OMC-M10 Serial",
+    body: "Bluetooth SPP 장치가 Windows COM 포트로 보이면 Chrome Web Serial로 엽니다.",
+    badge: "Web Serial",
   },
   {
     key: "uart",
     title: "UART",
-    body: "Web Serial API로 USB-UART 연결의 바이너리 스트림을 그대로 표시합니다.",
-    badge: "Chrome / Edge",
+    body: "일반 USB-UART 바이너리 스트림을 Chrome Web Serial로 엽니다.",
+    badge: "Web Serial",
   },
 ];
 
@@ -61,11 +61,9 @@ export default function HomePage() {
     startSession,
   } = useFx2RealtimeSession();
 
-  const [bleSupported, setBleSupported] = useState(true);
   const [serialSupported, setSerialSupported] = useState(true);
 
   useEffect(() => {
-    setBleSupported(typeof navigator !== "undefined" && "bluetooth" in navigator);
     setSerialSupported(typeof navigator !== "undefined" && "serial" in navigator);
   }, []);
 
@@ -78,10 +76,6 @@ export default function HomePage() {
     (hardwareStatus === "requesting" || hardwareStatus === "connecting");
 
   const unsupportedMessage = useMemo(() => {
-    if (selectedMode === "bluetooth" && !bleSupported) {
-      return "OMC-M10은 Bluetooth 직렬 장치입니다. Chrome 또는 Edge에서 Web Serial 권한으로 연결해 주세요.";
-    }
-
     if (selectedMode === "bluetooth" && !serialSupported) {
       return "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
     }
@@ -91,7 +85,7 @@ export default function HomePage() {
     }
 
     return null;
-  }, [bleSupported, selectedMode, serialSupported]);
+  }, [selectedMode, serialSupported]);
 
   const handleStart = async () => {
     if (!selectedModeSupported) {
@@ -117,8 +111,8 @@ export default function HomePage() {
           실시간 뇌파 데이터를 시각화합니다
         </h2>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6B7280] dark:text-slate-400">
-          Demo 모드는 브라우저 내부 mock 생성기를 사용하고, Bluetooth 및 UART는
-          Chrome 또는 Edge에서 실제 FX2 장치와 직접 연결됩니다.
+          Demo 모드는 브라우저 내부 mock 생성기를 사용하고, OMC-M10과 UART는
+          Chrome 또는 Edge의 Web Serial 권한으로 실제 장치와 연결됩니다.
         </p>
 
         <div className="mt-8">
@@ -160,9 +154,7 @@ export default function HomePage() {
                   </p>
                   {unsupported ? (
                     <p className="mt-3 text-xs leading-5 text-[#EF4444]">
-                      {item.key === "bluetooth"
-                        ? "Web Serial 미지원 브라우저입니다."
-                        : "Web Serial 미지원 브라우저입니다."}
+                      Web Serial 미지원 브라우저입니다.
                     </p>
                   ) : null}
                 </button>
@@ -185,7 +177,7 @@ export default function HomePage() {
               ? "브라우저 내부 generator가 1초 간격으로 데모 신호를 보냅니다."
               : selectedMode === "bluetooth"
               ? "OMC-M10 Bluetooth 직렬 포트를 Web Serial로 엽니다."
-              : "UART 권한 승인 후 0-255 바이너리 값을 단계형 차트로 표시합니다."}
+              : "UART 권한 승인 후 115200 8N1 바이너리 프레임을 표시합니다."}
           </p>
           {hardwareDetail ? (
             <p className="mt-2 text-xs leading-5 text-[#6B7280] dark:text-slate-400">

@@ -22,11 +22,24 @@ import {
   Fx2HardwareService,
   type Fx2HardwareStatus,
 } from "../services/fx2Hardware";
-import type { DeviceMode, Fx2IncomingMessage, Fx2State } from "../types/fx2";
+import type { DeviceMode, Fx2BinaryFrame, Fx2IncomingMessage, Fx2State } from "../types/fx2";
 
 type DemoPreset = "balanced" | "weakSignal" | "notWorn" | "disconnected" | "reset";
 
 type SessionPhase = "idle" | "running" | "stopped";
+
+export interface Fx2HardwareDiagnostics {
+  totalFrames: number;
+  ppdValidFrames: number;
+  ppdStandbyFrames: number;
+  lastPpd: boolean | null;
+  lastPud0: number | null;
+  lastBpm: number | null;
+  lastRrInterval: number | null;
+  lastCh1Raw: number | null;
+  lastCh2Raw: number | null;
+  lastFrameAt: string | null;
+}
 
 interface Fx2RealtimeContextValue {
   state: Fx2State;
@@ -35,6 +48,7 @@ interface Fx2RealtimeContextValue {
   sessionPhase: SessionPhase;
   hardwareStatus: Fx2HardwareStatus;
   hardwareDetail: string;
+  hardwareDiagnostics: Fx2HardwareDiagnostics;
   setSelectedMode: (mode: DeviceMode) => void;
   startSession: (modeOverride?: DeviceMode) => Promise<boolean>;
   stopSession: () => void;
@@ -44,6 +58,35 @@ interface Fx2RealtimeContextValue {
 }
 
 const Fx2RealtimeContext = createContext<Fx2RealtimeContextValue | null>(null);
+
+const createInitialHardwareDiagnostics = (): Fx2HardwareDiagnostics => ({
+  totalFrames: 0,
+  ppdValidFrames: 0,
+  ppdStandbyFrames: 0,
+  lastPpd: null,
+  lastPud0: null,
+  lastBpm: null,
+  lastRrInterval: null,
+  lastCh1Raw: null,
+  lastCh2Raw: null,
+  lastFrameAt: null,
+});
+
+const updateUartDiagnostics = (
+  prev: Fx2HardwareDiagnostics,
+  frame: Fx2BinaryFrame
+): Fx2HardwareDiagnostics => ({
+  totalFrames: prev.totalFrames + 1,
+  ppdValidFrames: prev.ppdValidFrames + (frame.ppd ? 1 : 0),
+  ppdStandbyFrames: prev.ppdStandbyFrames + (frame.ppd ? 0 : 1),
+  lastPpd: frame.ppd,
+  lastPud0: frame.pud0,
+  lastBpm: frame.bpm,
+  lastRrInterval: frame.ch6Raw,
+  lastCh1Raw: frame.ch1Raw,
+  lastCh2Raw: frame.ch2Raw,
+  lastFrameAt: new Date().toISOString(),
+});
 
 const applyLocalMessage = (
   nextMessage: Fx2IncomingMessage,
@@ -58,6 +101,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [state, setState] = useState<Fx2State>(() => createInitialFx2State("demo"));
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
   const [hardwareDetail, setHardwareDetail] = useState("");
+  const [hardwareDiagnostics, setHardwareDiagnostics] =
+    useState<Fx2HardwareDiagnostics>(() => createInitialHardwareDiagnostics());
 
   const hardwareRef = useRef(new Fx2HardwareService());
   const mockTimerRef = useRef<number | null>(null);
@@ -100,7 +145,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       }
 
       const nextMessage = event.mode === "uart"
-        ? parseUartBinaryFrame(event.frame, stateRef.current)
+        ? (() => {
+            setHardwareDiagnostics((prev) => updateUartDiagnostics(prev, event.frame));
+            return parseUartBinaryFrame(event.frame, stateRef.current);
+          })()
         : parseHardwarePayload(event.raw, event.mode, stateRef.current);
 
       if (!nextMessage) {
@@ -159,6 +207,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
   const resetState = (mode: DeviceMode) => {
     setState(createInitialFx2State(mode));
+    setHardwareDiagnostics(createInitialHardwareDiagnostics());
   };
 
   const connectHardware = async (mode: Extract<DeviceMode, "bluetooth" | "uart">) => {
@@ -283,6 +332,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       sessionPhase,
       hardwareStatus,
       hardwareDetail,
+      hardwareDiagnostics,
       setSelectedMode,
       startSession,
       stopSession,
@@ -292,6 +342,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     }),
     [
       hardwareDetail,
+      hardwareDiagnostics,
       hardwareStatus,
       selectedMode,
       sessionPhase,

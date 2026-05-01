@@ -28,6 +28,12 @@ const formatMs = (ms: number) => {
   return `${hh}:${mm}:${ss}`;
 };
 
+const formatHexByte = (value: number | null) =>
+  value === null ? "—" : `0x${value.toString(16).padStart(2, "0").toUpperCase()}`;
+
+const formatDiagnosticNumber = (value: number | null, suffix = "") =>
+  value === null ? "—" : `${value}${suffix}`;
+
 const wearLabel = {
   worn: "안정 착용",
   unstable: "불안정",
@@ -112,6 +118,7 @@ export default function LivePage() {
     sessionPhase,
     hardwareStatus,
     hardwareDetail,
+    hardwareDiagnostics,
     startSession,
     disconnectHardware,
     pushManualUpdate,
@@ -223,6 +230,11 @@ export default function LivePage() {
 
   const latestRrInterval = state.rrInterval[state.rrInterval.length - 1] ?? 0;
   const rrDerivedBpm = latestRrInterval > 0 ? Math.round(60000 / latestRrInterval) : 0;
+  const showHardwareDiagnostics =
+    selectedMode !== "demo" || hardwareDiagnostics.totalFrames > 0;
+  const lastFrameAtLabel = hardwareDiagnostics.lastFrameAt
+    ? new Date(hardwareDiagnostics.lastFrameAt).toLocaleTimeString("ko-KR")
+    : "—";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -382,6 +394,89 @@ export default function LivePage() {
             ) : null}
           </div>
         </section>
+
+        {showHardwareDiagnostics ? (
+          <section className="fx2-card fx2-outline">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="fx2-title">OMC-M10 실기기 진단</h2>
+                <p className="text-xs leading-5 text-[#6B7280] dark:text-slate-400">
+                  Web Serial 프레임 수신, PPD 상태, PUD0/RR/raw 값을 연결 중에 바로 확인합니다.
+                </p>
+              </div>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                마지막 프레임 {lastFrameAtLabel}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  Frames
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {hardwareDiagnostics.totalFrames.toLocaleString()}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  PPD=1
+                </p>
+                <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-300">
+                  {hardwareDiagnostics.ppdValidFrames.toLocaleString()}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  PPD=0
+                </p>
+                <p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-300">
+                  {hardwareDiagnostics.ppdStandbyFrames.toLocaleString()}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  PUD0
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {formatHexByte(hardwareDiagnostics.lastPud0)}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  BPM
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {formatDiagnosticNumber(hardwareDiagnostics.lastBpm)}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  RR
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {formatDiagnosticNumber(hardwareDiagnostics.lastRrInterval, " ms")}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  CH1 raw
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {formatDiagnosticNumber(hardwareDiagnostics.lastCh1Raw)}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  CH2 raw
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {formatDiagnosticNumber(hardwareDiagnostics.lastCh2Raw)}
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {/* Export section — shown after session ends if recording exists */}
         {isStopped && recSummary.hasRecording ? (

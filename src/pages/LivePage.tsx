@@ -383,7 +383,7 @@ export default function LivePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400">
-            <span>모드: {selectedMode.toUpperCase()}</span>
+            <span>모드: {{ demo: "DEMO", bluetooth: "OMC-M10", uart: "UART" }[selectedMode] ?? selectedMode.toUpperCase()}</span>
             <span>·</span>
             <span>{signalLabel[state.signalStatus]}</span>
             {hardwareDetail ? (

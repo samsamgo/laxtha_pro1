@@ -50,6 +50,12 @@ const hardwareLabelMap = {
   error: "연결 오류",
 } as const;
 
+const modeLabelMap: Record<string, string> = {
+  demo: "DEMO",
+  bluetooth: "OMC-M10",
+  uart: "UART",
+};
+
 export default function HomePage() {
   const navigate = useNavigate();
   const {
@@ -219,7 +225,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">장치 모드</span>
             <span className="text-xs font-semibold text-[#111827] dark:text-white">
-              {selectedMode.toUpperCase()}
+              {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
             </span>
           </div>
           <div className="flex items-center justify-between">

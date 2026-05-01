@@ -123,7 +123,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-01 기준)
 
-최신 기준 커밋: `5896586 Add OMC-M10 live diagnostics strip`
+최신 기능 기준 커밋: `5896586 Add OMC-M10 live diagnostics strip`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)

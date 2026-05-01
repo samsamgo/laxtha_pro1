@@ -121,7 +121,9 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-04-29 밤 기준)
+## 현재 상태 (2026-05-01 기준)
+
+최신 기준 커밋: `5896586 Add OMC-M10 live diagnostics strip`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -147,9 +149,11 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] `/live`의 OMC-M10 연결/해제 버튼
 - [x] PPG/sdPPG/RR 추이 카드 표시
 - [x] CSV/JSON에 PPG/sdPPG/RR 포함
+- [x] `/live` OMC-M10 실기기 진단 스트립 (Frames, PPD=1/0, PUD0, BPM, RR, CH1/CH2 raw)
+- [x] HomePage OMC-M10 SPP/Web Serial 안내 문구 정리
 
 ### 미완료
-- [ ] **[하드웨어] OMC-M10 실데이터 의미 검증** — 115200 baud, `0xFF 0xFE` 헤더, PPD=1, PUD0 비트, RR 간격 해석 확인
+- [ ] **[하드웨어] OMC-M10 실데이터 의미 검증** — 새 진단 스트립에서 Frames, PPD=1/0, PUD0, BPM, RR, CH1/CH2 raw를 보며 115200 baud, `0xFF 0xFE` 헤더, PUD0 비트, RR 간격 해석 확인
 - [ ] **[UI] 남은 한글/문서 표현 정리** — 화면 우선, 문서는 Claude 인수인계 기준으로 계속 업데이트
 
 ---

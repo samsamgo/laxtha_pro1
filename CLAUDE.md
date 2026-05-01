@@ -184,6 +184,7 @@ git push origin main
 
 ## Notion 프로젝트 페이지
 
-- 메인: https://www.notion.so/3427b08f46a880ed9babe7d4bd559f84
+- 프로젝트 HQ: https://app.notion.com/p/3537b08f46a881e3ba50df94083f28f1
+- Command Center: https://app.notion.com/p/3427b08f46a880ed9babe7d4bd559f84
+- Role Component Hub: https://app.notion.com/p/3517b08f46a8816196d6cc9177f2144a
 - 실행 보드: https://www.notion.so/84c2e09a934b44a2b12093a8e00189de
-- v3 계획: https://www.notion.so/3497b08f46a8819fa0c4f649a63d7dc6

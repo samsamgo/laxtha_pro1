@@ -166,7 +166,7 @@ export const parseUartBinaryFrame = (
   const signalQuality = wearing && ppgOk ? 88 : 42;
 
   return {
-    mode: "uart",
+    mode: fallbackState.mode,
     ch1,
     ch2,
     bpm,

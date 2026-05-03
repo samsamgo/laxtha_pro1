@@ -1,41 +1,3 @@
-type BluetoothServiceUUID = string | number;
-
-type BluetoothCharacteristicUUID = string | number;
-
-interface BluetoothRemoteGATTCharacteristic extends EventTarget {
-  value: DataView | null;
-  startNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
-}
-
-interface BluetoothRemoteGATTService {
-  getCharacteristic(
-    characteristic: BluetoothCharacteristicUUID
-  ): Promise<BluetoothRemoteGATTCharacteristic>;
-}
-
-interface BluetoothRemoteGATTServer {
-  connected: boolean;
-  connect(): Promise<BluetoothRemoteGATTServer>;
-  disconnect(): void;
-  getPrimaryService(
-    service: BluetoothServiceUUID
-  ): Promise<BluetoothRemoteGATTService>;
-}
-
-interface BluetoothDeviceRequestOptions {
-  acceptAllDevices?: boolean;
-  optionalServices?: BluetoothServiceUUID[];
-}
-
-interface BluetoothDevice extends EventTarget {
-  name?: string;
-  gatt?: BluetoothRemoteGATTServer;
-}
-
-interface Bluetooth {
-  requestDevice(options: BluetoothDeviceRequestOptions): Promise<BluetoothDevice>;
-}
-
 interface SerialPortFilter {
   usbVendorId?: number;
   usbProductId?: number;
@@ -81,6 +43,5 @@ interface Serial {
 }
 
 interface Navigator {
-  bluetooth: Bluetooth;
   serial?: Serial;
 }

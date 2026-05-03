@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 
 const modeLabelMap: Record<string, string> = {
-  bluetooth: "OMC-M10",
+  omc: "OMC-M10",
   demo: "DEMO",
   uart: "UART",
 };

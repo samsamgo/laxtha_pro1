@@ -52,7 +52,7 @@ const hardwareLabelMap = {
 
 const modeLabelMap: Record<string, string> = {
   demo: "DEMO",
-  bluetooth: "OMC-M10",
+  omc: "OMC-M10",
   uart: "UART",
 };
 

@@ -35,7 +35,7 @@ const formatDiagnosticNumber = (value: number | null, suffix = "") =>
   value === null ? "—" : `${value}${suffix}`;
 
 const modeLabelMap: Record<string, string> = {
-  bluetooth: "OMC-M10",
+  omc: "OMC-M10",
   demo: "DEMO",
   uart: "UART",
 };

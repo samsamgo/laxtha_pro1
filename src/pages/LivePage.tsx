@@ -273,6 +273,11 @@ export default function LivePage() {
   const hardwareBusy =
     hardwareStatus === "requesting" || hardwareStatus === "connecting";
   const hardwareConnected = hardwareStatus === "connected";
+  const showConnectionWarning =
+    selectedMode !== "demo" &&
+    sessionPhase === "running" &&
+    !hardwareConnected &&
+    !hardwareBusy;
   const handleOmcm10Connect = async () => {
     if (hardwareConnected) {
       disconnectHardware();
@@ -400,6 +405,12 @@ export default function LivePage() {
             ) : null}
           </div>
         </section>
+
+        {showConnectionWarning ? (
+          <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            ⚠️ 하드웨어 연결이 끊어졌습니다. OMC-M10 연결 버튼으로 재연결하거나 세션을 종료하세요.
+          </div>
+        ) : null}
 
         {showHardwareDiagnostics ? (
           <section className="fx2-card fx2-outline">

@@ -34,6 +34,12 @@ const formatHexByte = (value: number | null) =>
 const formatDiagnosticNumber = (value: number | null, suffix = "") =>
   value === null ? "—" : `${value}${suffix}`;
 
+const modeLabelMap: Record<string, string> = {
+  bluetooth: "OMC-M10",
+  demo: "DEMO",
+  uart: "UART",
+};
+
 const wearLabel = {
   worn: "안정 착용",
   unstable: "불안정",
@@ -383,7 +389,7 @@ export default function LivePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400">
-            <span>모드: {{ demo: "DEMO", bluetooth: "OMC-M10", uart: "UART" }[selectedMode] ?? selectedMode.toUpperCase()}</span>
+            <span>모드: {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}</span>
             <span>·</span>
             <span>{signalLabel[state.signalStatus]}</span>
             {hardwareDetail ? (

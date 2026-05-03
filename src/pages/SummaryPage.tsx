@@ -1,6 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 
+const modeLabelMap: Record<string, string> = {
+  bluetooth: "OMC-M10",
+  demo: "DEMO",
+  uart: "UART",
+};
+
 const formatDuration = (seconds: number) => {
   const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
   const mm = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
@@ -144,7 +150,7 @@ export default function SummaryPage() {
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">장치 모드</span>
             <span className="text-xs font-semibold text-[#111827] dark:text-white">
-              {selectedMode.toUpperCase()}
+              {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
             </span>
           </div>
           <div className="flex items-center justify-between">

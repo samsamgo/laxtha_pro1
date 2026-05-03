@@ -122,7 +122,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-03 기준)
 
-최신 커밋: `0215ea2 Add PC frame counter and dropped-frame detection to diagnostics strip`
+최신 커밋: `5da92d9 Add PUD0 bit breakdown labels to diagnostics tile`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -202,3 +202,4 @@ git push origin main
 - Command Center: https://app.notion.com/p/3427b08f46a880ed9babe7d4bd559f84
 - Role Component Hub: https://app.notion.com/p/3517b08f46a8816196d6cc9177f2144a
 - 실행 보드: https://www.notion.so/84c2e09a934b44a2b12093a8e00189de
+- **[최신 핸드오프] 세션2 진단 강화**: https://www.notion.so/3557b08f46a881d6bde5e6b6e0ff69b0

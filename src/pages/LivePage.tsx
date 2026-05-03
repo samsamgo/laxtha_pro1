@@ -472,9 +472,25 @@ export default function LivePage() {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
                   PUD0
                 </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                <p className="mt-1 text-base font-bold text-[#111827] dark:text-white">
                   {formatHexByte(hardwareDiagnostics.lastPud0)}
                 </p>
+                {hardwareDiagnostics.lastPud0 !== null ? (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {[
+                      { label: "착용", bit: 0x40 },
+                      { label: "PPG", bit: 0x04 },
+                      { label: "배터리", bit: 0x10 },
+                    ].map(({ label, bit }) => {
+                      const on = Boolean(hardwareDiagnostics.lastPud0! & bit);
+                      return (
+                        <span key={label} className={`rounded px-1 py-0.5 text-[8px] font-bold leading-none ${on ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300" : "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500"}`}>
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
               <div className="fx2-surface rounded-2xl px-3 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">

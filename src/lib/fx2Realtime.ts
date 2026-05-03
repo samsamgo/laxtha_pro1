@@ -236,10 +236,22 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     ),
     sessionStartedAt,
     lastUpdated: new Date(nextTimestamp).toISOString(),
-    logs: appendLog(
-      prev.logs,
-      `[${new Date(nextTimestamp).toLocaleTimeString()}] ${message.mode.toUpperCase()} bpm=${message.bpm} / signal=${message.signalQuality}`
-    ),
+    logs: (() => {
+      const isFirstSample = prev.stats.sampleCount === 0;
+      const wearChanged = prev.wearStatus !== wearStatus;
+      const signalChanged = prev.signalStatus !== signalStatus;
+      if (!isFirstSample && !wearChanged && !signalChanged) return prev.logs;
+      const wearLabels: Record<WearStatus, string> = { worn: "착용", unstable: "불안정", not_worn: "미착용" };
+      const sigLabels: Record<SignalStatus, string> = { good: "양호", normal: "보통", poor: "불량" };
+      const timeStr = new Date(nextTimestamp).toLocaleTimeString("ko-KR");
+      if (isFirstSample) {
+        return appendLog(prev.logs, `[${timeStr}] 첫 번째 샘플 — bpm=${message.bpm} 착용=${wearLabels[wearStatus]} 신호=${sigLabels[signalStatus]}`);
+      }
+      const changes: string[] = [];
+      if (wearChanged) changes.push(`착용→${wearLabels[wearStatus]}`);
+      if (signalChanged) changes.push(`신호→${sigLabels[signalStatus]}`);
+      return appendLog(prev.logs, `[${timeStr}] ${changes.join(" ")} bpm=${message.bpm}`);
+    })(),
     stats: {
       sampleCount: nextSampleCount,
       averageHeartRate: roundToSingleDecimal(averageHeartRate),

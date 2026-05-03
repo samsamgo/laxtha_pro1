@@ -415,7 +415,7 @@ export default function LivePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-9">
               <div className="fx2-surface rounded-2xl px-3 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
                   Frames
@@ -479,6 +479,30 @@ export default function LivePage() {
                 <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
                   {formatDiagnosticNumber(hardwareDiagnostics.lastCh2Raw)}
                 </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  전극 (E1/E2/REF)
+                </p>
+                {hardwareDiagnostics.lastElectrodeStatus === null ? (
+                  <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">—</p>
+                ) : (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    {[
+                      { label: "E1", bit: 0x20 },
+                      { label: "E2", bit: 0x10 },
+                      { label: "REF", bit: 0x08 },
+                    ].map(({ label, bit }) => {
+                      const on = Boolean(hardwareDiagnostics.lastElectrodeStatus! & bit);
+                      return (
+                        <span key={label} className="flex flex-col items-center gap-0.5">
+                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${on ? "bg-green-500" : "bg-red-400"}`} />
+                          <span className="text-[9px] font-semibold text-[#6B7280] dark:text-slate-400">{label}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </section>

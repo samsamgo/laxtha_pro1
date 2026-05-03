@@ -37,6 +37,7 @@ export interface Fx2HardwareDiagnostics {
   lastRrInterval: number | null;
   lastCh1Raw: number | null;
   lastCh2Raw: number | null;
+  lastElectrodeStatus: number | null;
   lastFrameAt: string | null;
 }
 
@@ -68,6 +69,7 @@ const createInitialHardwareDiagnostics = (): Fx2HardwareDiagnostics => ({
   lastRrInterval: null,
   lastCh1Raw: null,
   lastCh2Raw: null,
+  lastElectrodeStatus: null,
   lastFrameAt: null,
 });
 
@@ -84,6 +86,7 @@ const updateUartDiagnostics = (
   lastRrInterval: frame.ch6Raw,
   lastCh1Raw: frame.ch1Raw,
   lastCh2Raw: frame.ch2Raw,
+  lastElectrodeStatus: frame.electrodeStatus,
   lastFrameAt: new Date().toISOString(),
 });
 

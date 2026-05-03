@@ -77,7 +77,7 @@ export class Fx2HardwareService {
   }
 
   // OMC-M10 is Bluetooth Classic SPP — connects via Web Serial, not Web Bluetooth.
-  async connectBluetooth() {
+  async connectOmc() {
     this.setStatus("requesting", "Select the OMC-M10 Bluetooth serial port.");
     return this.connectUart({ forcePrompt: true });
   }

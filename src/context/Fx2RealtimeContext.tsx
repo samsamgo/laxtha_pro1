@@ -199,7 +199,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const connectHardware = async (mode: Extract<DeviceMode, "omc" | "uart">) => {
     const connected =
       mode === "omc"
-        ? await hardwareRef.current.connectBluetooth()
+        ? await hardwareRef.current.connectOmc()
         : await hardwareRef.current.connectUart();
 
     if (!connected) {

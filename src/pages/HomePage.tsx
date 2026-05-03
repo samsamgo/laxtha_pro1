@@ -28,7 +28,7 @@ const modeCards: Array<{
     badge: "로컬 시뮬레이션",
   },
   {
-    key: "bluetooth",
+    key: "omc",
     title: "OMC-M10 Serial",
     body: "Bluetooth SPP 장치가 Windows COM 포트로 보이면 Chrome Web Serial로 엽니다.",
     badge: "Web Serial",
@@ -82,7 +82,7 @@ export default function HomePage() {
     (hardwareStatus === "requesting" || hardwareStatus === "connecting");
 
   const unsupportedMessage = useMemo(() => {
-    if (selectedMode === "bluetooth" && !serialSupported) {
+    if (selectedMode === "omc" && !serialSupported) {
       return "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
     }
 
@@ -129,7 +129,7 @@ export default function HomePage() {
             {modeCards.map((item) => {
               const active = item.key === selectedMode;
               const unsupported =
-                (item.key === "bluetooth" && !serialSupported) ||
+                (item.key === "omc" && !serialSupported) ||
                 (item.key === "uart" && !serialSupported);
 
               return (
@@ -181,7 +181,7 @@ export default function HomePage() {
           <p className="mt-2 text-xs leading-5 text-[#6B7280] dark:text-slate-400">
             {selectedMode === "demo"
               ? "브라우저 내부 generator가 1초 간격으로 데모 신호를 보냅니다."
-              : selectedMode === "bluetooth"
+              : selectedMode === "omc"
               ? "OMC-M10 Bluetooth 직렬 포트를 Web Serial로 엽니다."
               : "UART 권한 승인 후 115200 8N1 바이너리 프레임을 표시합니다."}
           </p>

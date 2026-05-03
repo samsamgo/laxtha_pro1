@@ -1,6 +1,6 @@
 import type { DeviceMode, Fx2BinaryFrame } from "../types/fx2";
 
-export type Fx2HardwareMode = Extract<DeviceMode, "bluetooth" | "uart">;
+export type Fx2HardwareMode = Extract<DeviceMode, "omc" | "uart">;
 
 export type Fx2HardwareStatus =
   | "idle"
@@ -12,33 +12,19 @@ export type Fx2HardwareStatus =
 
 export type Fx2HardwareEvent =
   | { type: "status"; status: Fx2HardwareStatus; detail?: string }
-  | { type: "packet"; mode: "bluetooth"; raw: string }
   | { type: "packet"; mode: "uart"; frame: Fx2BinaryFrame };
-
-interface BluetoothConnectOptions {
-  serviceUuid?: BluetoothServiceUUID;
-  characteristicUuid?: BluetoothCharacteristicUUID;
-}
 
 interface UartConnectOptions {
   baudRate?: number;
   forcePrompt?: boolean;
 }
 
-const DEFAULT_BLE_SERVICE_UUID = "12345678-1234-1234-1234-123456789abc";
-const DEFAULT_BLE_CHARACTERISTIC_UUID = "12345678-1234-1234-1234-123456789abd";
 const DEFAULT_UART_BAUD_RATE = 115200;
 // Empty filters = show all available ports (Bluetooth SPP COM ports have no USB VID/PID)
 const DEFAULT_UART_FILTERS: SerialPortFilter[] = [];
 
-const MAX_RECONNECT_ATTEMPTS = 3;
-const RECONNECT_DELAY_MS = 2000;
 
 export const DEFAULT_HARDWARE_OPTIONS = {
-  bluetooth: {
-    serviceUuid: DEFAULT_BLE_SERVICE_UUID,
-    characteristicUuid: DEFAULT_BLE_CHARACTERISTIC_UUID,
-  },
   uart: {
     baudRate: DEFAULT_UART_BAUD_RATE,
     filters: DEFAULT_UART_FILTERS,
@@ -52,10 +38,6 @@ export class Fx2HardwareService {
 
   private listeners = new Set<(event: Fx2HardwareEvent) => void>();
 
-  private bleDevice: BluetoothDevice | null = null;
-
-  private bleCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
-
   private serialPort: SerialPort | null = null;
 
   private lastSerialPort: SerialPort | null = null;
@@ -64,16 +46,7 @@ export class Fx2HardwareService {
 
   private serialAbort = false;
 
-  private bleBuffer = "";
-
   private isIntentionalDisconnect = false;
-
-  private reconnectTimeoutId: number | null = null;
-
-  private lastBleServiceUuid: BluetoothServiceUUID = DEFAULT_BLE_SERVICE_UUID;
-
-  private lastBleCharacteristicUuid: BluetoothCharacteristicUUID =
-    DEFAULT_BLE_CHARACTERISTIC_UUID;
 
   private lastUartBaudRate = DEFAULT_UART_BAUD_RATE;
 
@@ -103,74 +76,10 @@ export class Fx2HardwareService {
     return this.status;
   }
 
-  async connectBluetooth(options: BluetoothConnectOptions = {}) {
-    if (typeof navigator !== "undefined" && navigator.serial) {
-      this.setStatus(
-        "requesting",
-        "Select the OMC-M10 Bluetooth serial port."
-      );
-      return this.connectUart({ forcePrompt: true });
-    }
-
-    await this.disconnect();
-
-    if (typeof navigator === "undefined" || !("bluetooth" in navigator)) {
-      this.setStatus(
-        "unsupported",
-        "OMC-M10 uses Bluetooth SPP. Use Chrome or Edge with Web Serial support."
-      );
-      return false;
-    }
-
-    try {
-      this.setStatus("requesting", "Select a Bluetooth device.");
-
-      const serviceUuid = options.serviceUuid ?? DEFAULT_BLE_SERVICE_UUID;
-      const characteristicUuid =
-        options.characteristicUuid ?? DEFAULT_BLE_CHARACTERISTIC_UUID;
-
-      this.lastBleServiceUuid = serviceUuid;
-      this.lastBleCharacteristicUuid = characteristicUuid;
-      this.isIntentionalDisconnect = false;
-
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [serviceUuid],
-      });
-
-      this.bleDevice = device;
-      this.setStatus("connecting", `${device.name ?? "Bluetooth device"} connecting`);
-
-      device.addEventListener(
-        "gattserverdisconnected",
-        this.handleBluetoothDisconnect
-      );
-
-      const server = await device.gatt?.connect();
-
-      if (!server) {
-        throw new Error("Failed to connect to the GATT server.");
-      }
-
-      const service = await server.getPrimaryService(serviceUuid);
-      const characteristic = await service.getCharacteristic(characteristicUuid);
-      this.bleCharacteristic = characteristic;
-
-      characteristic.addEventListener(
-        "characteristicvaluechanged",
-        this.handleBluetoothNotification as EventListener
-      );
-
-      await characteristic.startNotifications();
-
-      this.setStatus("connected", `${device.name ?? "Bluetooth device"} streaming`);
-      return true;
-    } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "Bluetooth connection failed.";
-      this.setStatus("error", detail);
-      return false;
-    }
+  // OMC-M10 is Bluetooth Classic SPP — connects via Web Serial, not Web Bluetooth.
+  async connectBluetooth() {
+    this.setStatus("requesting", "Select the OMC-M10 Bluetooth serial port.");
+    return this.connectUart({ forcePrompt: true });
   }
 
   async connectUart(options: UartConnectOptions = {}) {
@@ -202,33 +111,6 @@ export class Fx2HardwareService {
 
   async disconnect() {
     this.isIntentionalDisconnect = true;
-
-    if (this.reconnectTimeoutId !== null) {
-      clearTimeout(this.reconnectTimeoutId);
-      this.reconnectTimeoutId = null;
-    }
-
-    if (this.bleCharacteristic) {
-      this.bleCharacteristic.removeEventListener(
-        "characteristicvaluechanged",
-        this.handleBluetoothNotification as EventListener
-      );
-      this.bleCharacteristic = null;
-    }
-
-    if (this.bleDevice) {
-      this.bleDevice.removeEventListener(
-        "gattserverdisconnected",
-        this.handleBluetoothDisconnect
-      );
-
-      if (this.bleDevice.gatt?.connected) {
-        this.bleDevice.gatt.disconnect();
-      }
-
-      this.bleDevice = null;
-    }
-
     this.serialAbort = true;
 
     if (this.serialReader) {
@@ -257,7 +139,6 @@ export class Fx2HardwareService {
     }
 
     this.binaryBuffer = [];
-    this.bleBuffer = "";
     this.uartReconnectEnabled = false;
     this.isIntentionalDisconnect = false;
     this.setStatus("idle");
@@ -368,111 +249,6 @@ export class Fx2HardwareService {
     this.serialAbort = false;
     void this.readSerialLoop();
   }
-
-  private flushBleBuffer(chunk: string) {
-    const nextBuffer = `${this.bleBuffer}${chunk}`;
-    const lines = nextBuffer.split(/\r?\n/);
-    this.bleBuffer = lines.pop() ?? "";
-    lines
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .forEach((line) => {
-        this.emit({ type: "packet", mode: "bluetooth", raw: line });
-      });
-  }
-
-  private handleBluetoothDisconnect = () => {
-    // bleDevice is null after intentional disconnect() — treat that as intentional too
-    if (this.isIntentionalDisconnect || !this.bleDevice) {
-      return;
-    }
-
-    this.bleDevice.removeEventListener(
-      "gattserverdisconnected",
-      this.handleBluetoothDisconnect
-    );
-
-    this.scheduleReconnect(1);
-  };
-
-  private scheduleReconnect(attempt: number): void {
-    if (attempt > MAX_RECONNECT_ATTEMPTS) {
-      this.setStatus("error", "Reconnect failed. Check the device.");
-      return;
-    }
-
-    this.setStatus("connecting", `Reconnect attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
-
-    this.reconnectTimeoutId = window.setTimeout(() => {
-      void this.attemptReconnect(attempt);
-    }, RECONNECT_DELAY_MS);
-  }
-
-  private async attemptReconnect(attempt: number): Promise<void> {
-    this.reconnectTimeoutId = null;
-
-    if (this.isIntentionalDisconnect || !this.bleDevice) {
-      return;
-    }
-
-    if (this.bleCharacteristic) {
-      this.bleCharacteristic.removeEventListener(
-        "characteristicvaluechanged",
-        this.handleBluetoothNotification as EventListener
-      );
-      this.bleCharacteristic = null;
-    }
-
-    try {
-      const server = await this.bleDevice.gatt?.connect();
-
-      if (this.isIntentionalDisconnect) {
-        return;
-      }
-
-      if (!server) {
-        throw new Error("GATT reconnect failed.");
-      }
-
-      const service = await server.getPrimaryService(this.lastBleServiceUuid);
-      const characteristic = await service.getCharacteristic(
-        this.lastBleCharacteristicUuid
-      );
-      this.bleCharacteristic = characteristic;
-
-      characteristic.addEventListener(
-        "characteristicvaluechanged",
-        this.handleBluetoothNotification as EventListener
-      );
-
-      await characteristic.startNotifications();
-      this.bleBuffer = "";
-
-      this.bleDevice.addEventListener(
-        "gattserverdisconnected",
-        this.handleBluetoothDisconnect
-      );
-
-      this.setStatus(
-        "connected",
-        `${this.bleDevice.name ?? "Bluetooth device"} reconnected`
-      );
-    } catch {
-      this.scheduleReconnect(attempt + 1);
-    }
-  }
-
-  private handleBluetoothNotification = (event: Event) => {
-    const target = event.target as BluetoothRemoteGATTCharacteristic | null;
-    const value = target?.value;
-
-    if (!value) {
-      return;
-    }
-
-    const chunk = new TextDecoder().decode(value.buffer);
-    this.flushBleBuffer(chunk);
-  };
 
   private handleSerialConnect = () => {
     if (!this.uartReconnectEnabled || this.serialPort || this.isIntentionalDisconnect) {

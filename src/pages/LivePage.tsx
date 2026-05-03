@@ -279,7 +279,7 @@ export default function LivePage() {
       return;
     }
 
-    await startSession("bluetooth");
+    await startSession("omc");
   };
 
   return (

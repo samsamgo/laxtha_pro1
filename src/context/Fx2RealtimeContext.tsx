@@ -14,7 +14,6 @@ import {
   buildMessageFromState,
   createInitialFx2State,
   createMockMessage,
-  parseHardwarePayload,
   parseUartBinaryFrame,
   summarizeFx2State
 } from "../lib/fx2Realtime";
@@ -144,24 +143,11 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         return;
       }
 
-      const nextMessage = event.mode === "uart"
-        ? (() => {
-            setHardwareDiagnostics((prev) => updateUartDiagnostics(prev, event.frame));
-            return parseUartBinaryFrame(event.frame, stateRef.current);
-          })()
-        : parseHardwarePayload(event.raw, event.mode, stateRef.current);
+      setHardwareDiagnostics((prev) => updateUartDiagnostics(prev, event.frame));
+      const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current);
 
       if (!nextMessage) {
-        // UART null = PPD=0 standby — silent discard (expected during charging)
-        if (event.mode !== "uart") {
-          setState((prev) => ({
-            ...prev,
-            logs: appendLog(
-              prev.logs,
-              `[${event.mode.toUpperCase()}] 수신 프레임을 해석하지 못했습니다.`
-            ),
-          }));
-        }
+        // PPD=0 standby frame — silent discard (expected during charging/standby)
         return;
       }
 
@@ -210,9 +196,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     setHardwareDiagnostics(createInitialHardwareDiagnostics());
   };
 
-  const connectHardware = async (mode: Extract<DeviceMode, "bluetooth" | "uart">) => {
+  const connectHardware = async (mode: Extract<DeviceMode, "omc" | "uart">) => {
     const connected =
-      mode === "bluetooth"
+      mode === "omc"
         ? await hardwareRef.current.connectBluetooth()
         : await hardwareRef.current.connectUart();
 

@@ -1,4 +1,4 @@
-export type DeviceMode = "demo" | "bluetooth" | "uart";
+export type DeviceMode = "demo" | "omc" | "uart";
 export type WearStatus = "worn" | "unstable" | "not_worn";
 export type SignalStatus = "good" | "normal" | "poor";
 

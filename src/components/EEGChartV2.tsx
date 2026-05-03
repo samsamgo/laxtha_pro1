@@ -7,7 +7,7 @@ export interface EEGChartV2Props {
   ch1: number[];
   ch2: number[];
   timestamps: number[]; // Unix ms
-  mode: "demo" | "bluetooth" | "uart";
+  mode: "demo" | "omc" | "uart";
   windowSeconds: ExtWindowSeconds;
   paused: boolean;
   ch1Visible: boolean;

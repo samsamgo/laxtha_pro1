@@ -68,7 +68,6 @@ src/
 Demo:     setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
 OMC-M10:  Bluetooth SPP(COM10/AMP-SPP) → Web Serial → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
 UART:     Web Serial binary → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
-BLE:      Web Bluetooth notify → parseHardwarePayload() → applyIncomingMessage() → setState
 
 Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 18000pt, heartRateHistory = 180pt, logs = 40건
 ```
@@ -121,9 +120,9 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-05-01 기준)
+## 현재 상태 (2026-05-03 기준)
 
-최신 기능 기준 커밋: `5896586 Add OMC-M10 live diagnostics strip`
+최신 커밋: `8ab393c Remove BLE dead code and rename DeviceMode bluetooth -> omc`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -151,10 +150,15 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] CSV/JSON에 PPG/sdPPG/RR 포함
 - [x] `/live` OMC-M10 실기기 진단 스트립 (Frames, PPD=1/0, PUD0, BPM, RR, CH1/CH2 raw)
 - [x] HomePage OMC-M10 SPP/Web Serial 안내 문구 정리
+- [x] 모드 레이블 수정 — `BLUETOOTH` → `OMC-M10` (HomePage, LivePage, SummaryPage)
+- [x] DeviceMode 리네임 — `"bluetooth"` → `"omc"` (전체 코드베이스)
+- [x] BLE dead code 완전 제거 — `fx2Hardware.ts`에서 Web Bluetooth API 코드, BLE 재연결 로직, `parseHardwarePayload`, `toBoolean`/`toNumber`/`toConnection` 헬퍼 제거
 
 ### 미완료
-- [ ] **[하드웨어] OMC-M10 실데이터 의미 검증** — 새 진단 스트립에서 Frames, PPD=1/0, PUD0, BPM, RR, CH1/CH2 raw를 보며 115200 baud, `0xFF 0xFE` 헤더, PUD0 비트, RR 간격 해석 확인
-- [ ] **[UI] 남은 한글/문서 표현 정리** — 화면 우선, 문서는 Claude 인수인계 기준으로 계속 업데이트
+- [ ] **[하드웨어] OMC-M10 실기기 검증** — `/live` 진단 스트립에서 Frames, PPD=1/0, PUD0, BPM, RR ms, CH1/CH2 raw 확인. 115200 8N1, `0xFF 0xFE` 헤더, PUD0 bit6/bit2, RR 간격 해석 검증
+- [ ] **[하드웨어] 차트 시간창 실기기 확인** — 30s/60s 선택 시 실제 timestamp 기준으로 맞는지 확인
+- [ ] **[하드웨어] PPG/sdPPG/RR 0 고정 여부** — 실기기에서 값이 0에 고정되지 않고 움직이는지 확인
+- [ ] **[하드웨어] 장시간 성능** — 5분 이상 연결 시 메모리/CPU 안정성 확인
 
 ---
 

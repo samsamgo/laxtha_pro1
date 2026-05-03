@@ -226,7 +226,10 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     rrInterval: rrIntervalValue > 0
       ? appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS)
       : prev.rrInterval,
-    powerSpectrum: appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS),
+    powerSpectrum:
+      powerSpectrumValue !== prev.powerSpectrum[prev.powerSpectrum.length - 1]
+        ? appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS)
+        : prev.powerSpectrum,
     heartRateHistory: appendValue(prev.heartRateHistory, message.bpm, METRIC_HISTORY_LIMIT),
     signalQualityHistory: appendValue(
       prev.signalQualityHistory,

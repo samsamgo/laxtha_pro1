@@ -122,7 +122,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-03 기준)
 
-최신 커밋: `19c36f8 Remove unused Fx2HardwareMode export and DeviceMode import`
+최신 커밋: `0215ea2 Add PC frame counter and dropped-frame detection to diagnostics strip`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -143,27 +143,32 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 재연결 오류 메시지 버그 수정
 - [x] summarizeFx2State() 성능 최적화 (점진적 집계)
 - [x] 바이너리 프로토콜 파서 (Fx2BinaryFrame, processBinaryBuffer, parseUartBinaryFrame)
-- [x] 6채널 데이터 타입 (EEG CH1/CH2 μV, PPG, sdPPG, RR 간격 ms, Power Spectrum)
 - [x] OMC-M10 Bluetooth SPP 연결 (Web Serial 포트 프롬프트, COM10/AMP-SPP)
 - [x] `/live`의 OMC-M10 연결/해제 버튼
-- [x] PPG/sdPPG/RR 추이 카드 표시
-- [x] CSV/JSON에 PPG/sdPPG/RR 포함
-- [x] `/live` OMC-M10 실기기 진단 스트립 (Frames, PPD=1/0, PUD0, BPM, RR, CH1/CH2 raw)
+- [x] PPG/sdPPG/RR/파워스펙트럼 추이 카드 표시 (6채널 차트 완비)
+- [x] CSV/JSON에 PPG/sdPPG/RR/powerSpectrum 포함
+- [x] `/live` OMC-M10 실기기 진단 스트립 (11타일: Frames/PC/드롭/PPD=1/0/PUD0/BPM/RR/CH1/CH2 raw/전극)
 - [x] HomePage OMC-M10 SPP/Web Serial 안내 문구 정리
 - [x] 모드 레이블 수정 — `BLUETOOTH` → `OMC-M10` (HomePage, LivePage, SummaryPage)
 - [x] DeviceMode 리네임 — `"bluetooth"` → `"omc"` (전체 코드베이스)
 - [x] BLE dead code 완전 제거 — `fx2Hardware.ts`에서 Web Bluetooth API 코드, BLE 재연결 로직, `parseHardwarePayload`, `toBoolean`/`toNumber`/`toConnection` 헬퍼 제거
 - [x] `modeLabelMap` 키 `"bluetooth"` → `"omc"` 수정 (HomePage, LivePage, SummaryPage)
 - [x] `web-apis.d.ts` Web Bluetooth 타입 선언 제거 — Web Serial 타입만 유지
-- [x] `parseUartBinaryFrame` 세션 모드 보존 수정 — `mode: "uart"` 하드코딩 → `fallbackState.mode` 사용 (OMC-M10 세션이 uart로 덮어쓰이는 버그 수정)
+- [x] `parseUartBinaryFrame` 세션 모드 보존 수정 — `mode: "uart"` 하드코딩 → `fallbackState.mode` 사용
 - [x] `connectBluetooth()` → `connectOmc()` 메서드 리네임 (`Fx2HardwareService`)
 - [x] 미사용 `Fx2HardwareMode` export 및 `DeviceMode` import 제거 (`fx2Hardware.ts`)
+- [x] 이벤트 로그 스팸 수정 — 60Hz 하드웨어에서 상태 전환(착용/신호)시만 로그 기록
+- [x] 하드웨어 연결 끊김 경고 배너 (세션 running 중 연결 유실 시 amber 경고 표시)
+- [x] 파워 스펙트럼 (CH3) Fx2State 추적 + LineChartCard 표시 + CSV/JSON 내보내기
+- [x] PC 프레임 카운터(0-31) + 드롭 프레임 감지 — PC 비연속 시 droppedFrames++ 빨간 표시
+- [x] 전극 상태 (byte[7] bit5=E1/bit4=E2/bit3=REF) 진단 타일 — 녹/적 도트 표시
 
 ### 미완료
-- [ ] **[하드웨어] OMC-M10 실기기 검증** — `/live` 진단 스트립에서 Frames, PPD=1/0, PUD0, BPM, RR ms, CH1/CH2 raw 확인. 115200 8N1, `0xFF 0xFE` 헤더, PUD0 bit6/bit2, RR 간격 해석 검증
+- [ ] **[하드웨어] OMC-M10 실기기 검증** — 진단 스트립: Frames 증가, PPD=1 수신, PC 0-31 순환, 드롭=0, PUD0 bit6/bit2, BPM/RR 정상값, 전극 도트 방향(1=연결?) 확인
 - [ ] **[하드웨어] 차트 시간창 실기기 확인** — 30s/60s 선택 시 실제 timestamp 기준으로 맞는지 확인
-- [ ] **[하드웨어] PPG/sdPPG/RR 0 고정 여부** — 실기기에서 값이 0에 고정되지 않고 움직이는지 확인
+- [ ] **[하드웨어] PPG/sdPPG/RR/파워스펙트럼 0 고정 여부** — CH4/CH5/CH6/CH3 실기기에서 움직이는지 확인
 - [ ] **[하드웨어] 장시간 성능** — 5분 이상 연결 시 메모리/CPU 안정성 확인
+- [ ] **[검증 후] 전극 도트 방향 수정** — 하드웨어 테스트 후 bit5/4/3이 1=연결인지 1=분리인지 확인하고 수정
 
 ---
 

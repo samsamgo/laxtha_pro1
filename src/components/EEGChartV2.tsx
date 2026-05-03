@@ -127,11 +127,16 @@ const buildWindowedData = (
 
   const latestMs = timestamps[pointCount - 1];
   const earliestMs = latestMs - windowSeconds * 1000;
-  let startIndex = 0;
 
-  while (startIndex < pointCount - 1 && timestamps[startIndex] < earliestMs) {
-    startIndex += 1;
+  // Binary search for first timestamp >= earliestMs
+  let lo = 0;
+  let hi = pointCount - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (timestamps[mid] < earliestMs) lo = mid + 1;
+    else hi = mid;
   }
+  const startIndex = lo;
 
   const visibleCount = pointCount - startIndex;
   const xValues = new Float64Array(visibleCount);

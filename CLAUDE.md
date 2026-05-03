@@ -122,7 +122,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-03 기준)
 
-최신 커밋: `8ab393c Remove BLE dead code and rename DeviceMode bluetooth -> omc`
+최신 커밋: `bf8ad45 Fix modeLabelMap keys to omc, remove Web Bluetooth type declarations`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -153,6 +153,9 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 모드 레이블 수정 — `BLUETOOTH` → `OMC-M10` (HomePage, LivePage, SummaryPage)
 - [x] DeviceMode 리네임 — `"bluetooth"` → `"omc"` (전체 코드베이스)
 - [x] BLE dead code 완전 제거 — `fx2Hardware.ts`에서 Web Bluetooth API 코드, BLE 재연결 로직, `parseHardwarePayload`, `toBoolean`/`toNumber`/`toConnection` 헬퍼 제거
+- [x] `modeLabelMap` 키 `"bluetooth"` → `"omc"` 수정 (HomePage, LivePage, SummaryPage)
+- [x] `web-apis.d.ts` Web Bluetooth 타입 선언 제거 — Web Serial 타입만 유지
+- [x] `parseUartBinaryFrame` 세션 모드 보존 수정 — `mode: "uart"` 하드코딩 → `fallbackState.mode` 사용 (OMC-M10 세션이 uart로 덮어쓰이는 버그 수정)
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 검증** — `/live` 진단 스트립에서 Frames, PPD=1/0, PUD0, BPM, RR ms, CH1/CH2 raw 확인. 115200 8N1, `0xFF 0xFE` 헤더, PUD0 bit6/bit2, RR 간격 해석 검증

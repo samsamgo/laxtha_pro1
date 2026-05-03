@@ -1,6 +1,5 @@
-import type { DeviceMode, Fx2BinaryFrame } from "../types/fx2";
+import type { Fx2BinaryFrame } from "../types/fx2";
 
-export type Fx2HardwareMode = Extract<DeviceMode, "omc" | "uart">;
 
 export type Fx2HardwareStatus =
   | "idle"

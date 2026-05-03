@@ -137,6 +137,7 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
     ppg: Math.sin(drift * 1.1) * 0.5 + (Math.random() - 0.5) * 0.1,
     sdppg: Math.cos(drift * 1.3) * 0.3 + (Math.random() - 0.5) * 0.05,
     rrInterval: bpm > 0 ? Math.round(60000 / bpm) : 833,
+    powerSpectrum: Math.abs(Math.sin(drift * 0.05)) * 80 + 100 + Math.random() * 5,
   };
 };
 

@@ -195,6 +195,7 @@ export default function LivePage() {
       ppg: state.ppg[lastIdx] ?? 0,
       sdppg: state.sdppg[lastIdx] ?? 0,
       rrInterval: state.rrInterval[state.rrInterval.length - 1] ?? 0,
+      powerSpectrum: state.powerSpectrum[lastIdx] ?? 0,
       wear: state.wearStatus,
       signal: state.signalStatus,
       mode: state.mode,
@@ -675,6 +676,17 @@ export default function LivePage() {
             }
             values={state.rrInterval}
             color="#8B5CF6"
+          />
+
+          <LineChartCard
+            title="파워 스펙트럼 (CH3)"
+            subtitle={
+              state.powerSpectrum.length > 0
+                ? `최근 ${(state.powerSpectrum[state.powerSpectrum.length - 1] ?? 0).toFixed(1)} · 2.048s마다 갱신`
+                : "아직 데이터 없음"
+            }
+            values={state.powerSpectrum}
+            color="#EC4899"
           />
         </div>
       </div>

@@ -9,6 +9,7 @@ export interface EegSample {
   ppg: number;
   sdppg: number;
   rrInterval: number;  // ms, 0 if unavailable
+  powerSpectrum: number;
   wear: WearStatus;
   signal: SignalStatus;
   mode: DeviceMode;

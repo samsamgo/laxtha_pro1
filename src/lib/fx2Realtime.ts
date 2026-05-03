@@ -84,6 +84,7 @@ export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
     ppg: [],
     sdppg: [],
     rrInterval: [],
+    powerSpectrum: [],
     heartRateHistory: [],
     signalQualityHistory: [],
     sessionSeconds: 0,
@@ -206,6 +207,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const ppgValue = message.ppg ?? (message.bpm / 100 + (message.signalQuality - 60) / 500);
   const sdppgValue = message.sdppg ?? 0;
   const rrIntervalValue = message.rrInterval ?? 0;
+  const powerSpectrumValue = message.powerSpectrum ?? 0;
 
   return {
     ...prev,
@@ -224,6 +226,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     rrInterval: rrIntervalValue > 0
       ? appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS)
       : prev.rrInterval,
+    powerSpectrum: appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS),
     heartRateHistory: appendValue(prev.heartRateHistory, message.bpm, METRIC_HISTORY_LIMIT),
     signalQualityHistory: appendValue(
       prev.signalQualityHistory,

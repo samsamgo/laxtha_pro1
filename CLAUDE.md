@@ -122,7 +122,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-03 기준)
 
-최신 커밋: `bf8ad45 Fix modeLabelMap keys to omc, remove Web Bluetooth type declarations`
+최신 커밋: `19c36f8 Remove unused Fx2HardwareMode export and DeviceMode import`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -156,6 +156,8 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] `modeLabelMap` 키 `"bluetooth"` → `"omc"` 수정 (HomePage, LivePage, SummaryPage)
 - [x] `web-apis.d.ts` Web Bluetooth 타입 선언 제거 — Web Serial 타입만 유지
 - [x] `parseUartBinaryFrame` 세션 모드 보존 수정 — `mode: "uart"` 하드코딩 → `fallbackState.mode` 사용 (OMC-M10 세션이 uart로 덮어쓰이는 버그 수정)
+- [x] `connectBluetooth()` → `connectOmc()` 메서드 리네임 (`Fx2HardwareService`)
+- [x] 미사용 `Fx2HardwareMode` export 및 `DeviceMode` import 제거 (`fx2Hardware.ts`)
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 검증** — `/live` 진단 스트립에서 Frames, PPD=1/0, PUD0, BPM, RR ms, CH1/CH2 raw 확인. 115200 8N1, `0xFF 0xFE` 헤더, PUD0 bit6/bit2, RR 간격 해석 검증

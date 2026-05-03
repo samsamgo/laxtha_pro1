@@ -31,8 +31,10 @@ export interface Fx2HardwareDiagnostics {
   totalFrames: number;
   ppdValidFrames: number;
   ppdStandbyFrames: number;
+  droppedFrames: number;
   lastPpd: boolean | null;
   lastPud0: number | null;
+  lastPc: number | null;
   lastBpm: number | null;
   lastRrInterval: number | null;
   lastCh1Raw: number | null;
@@ -63,8 +65,10 @@ const createInitialHardwareDiagnostics = (): Fx2HardwareDiagnostics => ({
   totalFrames: 0,
   ppdValidFrames: 0,
   ppdStandbyFrames: 0,
+  droppedFrames: 0,
   lastPpd: null,
   lastPud0: null,
+  lastPc: null,
   lastBpm: null,
   lastRrInterval: null,
   lastCh1Raw: null,
@@ -76,19 +80,27 @@ const createInitialHardwareDiagnostics = (): Fx2HardwareDiagnostics => ({
 const updateUartDiagnostics = (
   prev: Fx2HardwareDiagnostics,
   frame: Fx2BinaryFrame
-): Fx2HardwareDiagnostics => ({
-  totalFrames: prev.totalFrames + 1,
-  ppdValidFrames: prev.ppdValidFrames + (frame.ppd ? 1 : 0),
-  ppdStandbyFrames: prev.ppdStandbyFrames + (frame.ppd ? 0 : 1),
-  lastPpd: frame.ppd,
-  lastPud0: frame.pud0,
-  lastBpm: frame.bpm,
-  lastRrInterval: frame.ch6Raw,
-  lastCh1Raw: frame.ch1Raw,
-  lastCh2Raw: frame.ch2Raw,
-  lastElectrodeStatus: frame.electrodeStatus,
-  lastFrameAt: new Date().toISOString(),
-});
+): Fx2HardwareDiagnostics => {
+  // PC cycles 0-31; check for non-consecutive value to detect dropped frames
+  const expectedPc = prev.lastPc !== null ? (prev.lastPc + 1) % 32 : null;
+  const pcDropped = expectedPc !== null && frame.pc !== expectedPc ? 1 : 0;
+
+  return {
+    totalFrames: prev.totalFrames + 1,
+    ppdValidFrames: prev.ppdValidFrames + (frame.ppd ? 1 : 0),
+    ppdStandbyFrames: prev.ppdStandbyFrames + (frame.ppd ? 0 : 1),
+    droppedFrames: prev.droppedFrames + pcDropped,
+    lastPpd: frame.ppd,
+    lastPud0: frame.pud0,
+    lastPc: frame.pc,
+    lastBpm: frame.bpm,
+    lastRrInterval: frame.ch6Raw,
+    lastCh1Raw: frame.ch1Raw,
+    lastCh2Raw: frame.ch2Raw,
+    lastElectrodeStatus: frame.electrodeStatus,
+    lastFrameAt: new Date().toISOString(),
+  };
+};
 
 const applyLocalMessage = (
   nextMessage: Fx2IncomingMessage,

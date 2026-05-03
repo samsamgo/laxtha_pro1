@@ -427,13 +427,29 @@ export default function LivePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-9">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-11">
               <div className="fx2-surface rounded-2xl px-3 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
                   Frames
                 </p>
                 <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
                   {hardwareDiagnostics.totalFrames.toLocaleString()}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  PC
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
+                  {formatDiagnosticNumber(hardwareDiagnostics.lastPc)}
+                </p>
+              </div>
+              <div className="fx2-surface rounded-2xl px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
+                  드롭
+                </p>
+                <p className={`mt-1 text-lg font-bold ${hardwareDiagnostics.droppedFrames > 0 ? "text-red-500 dark:text-red-400" : "text-[#111827] dark:text-white"}`}>
+                  {hardwareDiagnostics.droppedFrames}
                 </p>
               </div>
               <div className="fx2-surface rounded-2xl px-3 py-3">

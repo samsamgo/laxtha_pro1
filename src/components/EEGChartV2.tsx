@@ -172,7 +172,8 @@ const makeOptions = (
   theme: ChartTheme,
   ch1Visible: boolean,
   ch2Visible: boolean,
-  onScaleChange: (chart: uPlot) => void
+  onScaleChange: (chart: uPlot) => void,
+  yScaleHalf: number | null = null,
 ): uPlot.Options => {
   const colors = THEME_COLORS[theme];
 
@@ -191,7 +192,9 @@ const makeOptions = (
     },
     scales: {
       x: { time: true },
-      y: { auto: true },
+      y: yScaleHalf !== null
+        ? { auto: false, min: -yScaleHalf, max: yScaleHalf }
+        : { auto: true },
     },
     axes: [
       {
@@ -281,6 +284,9 @@ function EEGChartV2({
   const [showMoreWindows, setShowMoreWindows] = useState(false);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [showZoomReset, setShowZoomReset] = useState(false);
+  // null = auto range; number = ±μV fixed scale
+  const [yScaleHalf, setYScaleHalf] = useState<number | null>(null);
+  const yScaleHalfRef = useRef<number | null>(null);
   const moreDropdownRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -580,7 +586,8 @@ function EEGChartV2({
         theme,
         ch1Visible,
         ch2Visible,
-        syncLiveEdgeState
+        syncLiveEdgeState,
+        yScaleHalfRef.current,
       ),
       dataToRender,
       container
@@ -633,6 +640,17 @@ function EEGChartV2({
 
   useEffect(() => { chartRef.current?.setSeries(1, { show: ch1Visible }); }, [ch1Visible]);
   useEffect(() => { chartRef.current?.setSeries(2, { show: ch2Visible }); }, [ch2Visible]);
+  useEffect(() => {
+    yScaleHalfRef.current = yScaleHalf;
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (yScaleHalf !== null) {
+      chart.setScale("y", { min: -yScaleHalf, max: yScaleHalf });
+    } else {
+      // Reset to auto — pass null to let uPlot recalculate bounds
+      chart.setScale("y", { min: null as unknown as number, max: null as unknown as number });
+    }
+  }, [yScaleHalf]);
   useEffect(() => {
     // User selected a new time window — clear any scroll-zoom override
     zoomedWindowRef.current = null;
@@ -754,6 +772,28 @@ function EEGChartV2({
               >
                 CH2
               </button>
+
+              {/* Y-axis scale presets */}
+              <div className="flex items-center gap-1">
+                {([null, 0.5, 1, 2, 5, 10] as Array<number | null>).map((v) => {
+                  const isActive = yScaleHalf === v;
+                  const label = v === null ? "Y:자동" : `±${v}`;
+                  return (
+                    <button
+                      key={String(v)}
+                      type="button"
+                      onClick={() => setYScaleHalf(v)}
+                      className={`rounded-full px-2.5 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                        isActive
+                          ? "bg-[#2563EB] text-white"
+                          : secondaryButtonClass
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
 
               {showZoomReset ? (
                 <button

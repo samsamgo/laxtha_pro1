@@ -28,6 +28,11 @@ const formatMs = (ms: number) => {
   return `${hh}:${mm}:${ss}`;
 };
 
+const formatFileSize = (bytes: number): string => {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  return `${Math.ceil(bytes / 1024)}KB`;
+};
+
 const formatHexByte = (value: number | null) =>
   value === null ? "—" : `0x${value.toString(16).padStart(2, "0").toUpperCase()}`;
 
@@ -644,6 +649,7 @@ export default function LivePage() {
                   {recorderSummary.startedAt
                     ? ` · ${new Date(recorderSummary.startedAt).toLocaleTimeString("ko-KR")} 시작`
                     : null}
+                  {" "}· CSV≈{formatFileSize(recorderSummary.sampleCount * 100 + 600)} / JSON≈{formatFileSize(recorderSummary.sampleCount * 160 + 200)}
                 </p>
                 <p className="mt-0.5 text-xs text-green-600 dark:text-green-400">
                   차트에서 사라진 데이터도 CSV에 모두 포함됩니다.

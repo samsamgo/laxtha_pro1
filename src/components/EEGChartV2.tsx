@@ -416,6 +416,67 @@ function EEGChartV2({
     return () => container.removeEventListener("wheel", handleWheel);
   }, []);
 
+  // Touch pinch zoom: two-finger pinch adjusts the visible time window
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let initialDistance: number | null = null;
+    let initialRange: number | null = null;
+
+    const getDistance = (touches: TouchList) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      initialDistance = getDistance(e.touches);
+      const chart = chartRef.current;
+      if (!chart) return;
+      const xMin = chart.scales.x.min;
+      const xMax = chart.scales.x.max;
+      if (xMin === undefined || xMax === undefined) return;
+      initialRange = xMax - xMin;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || initialDistance === null || initialRange === null) return;
+      e.preventDefault();
+      const currentDistance = getDistance(e.touches);
+      if (currentDistance === 0) return;
+      const newRange = Math.max(2, Math.min(initialRange * (initialDistance / currentDistance), 7200));
+      zoomedWindowRef.current = newRange;
+      setShowZoomReset(true);
+      const latestSecond = latestLiveSecondRef.current;
+      const chart = chartRef.current;
+      if (latestSecond !== null && chart) {
+        const newMin = Math.max(latestSecond - newRange, 0);
+        isProgrammaticScaleRef.current = true;
+        chart.setScale("x", { min: newMin, max: latestSecond });
+        isProgrammaticScaleRef.current = false;
+        visibleRangeRef.current = { min: newMin, max: latestSecond };
+        atLiveEdgeRef.current = true;
+        setShowLiveButton(false);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      initialDistance = null;
+      initialRange = null;
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []);
+
   const toggleVideoRecording = useCallback(() => {
     if (isRecordingVideo) {
       mediaRecorderRef.current?.stop();

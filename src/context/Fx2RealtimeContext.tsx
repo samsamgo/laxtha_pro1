@@ -8,6 +8,7 @@ import {
   type Dispatch,
   type PropsWithChildren
 } from "react";
+import { EegSessionRecorder } from "../lib/eegSessionRecorder";
 import {
   appendLog,
   applyIncomingMessage,
@@ -21,6 +22,7 @@ import {
   Fx2HardwareService,
   type Fx2HardwareStatus,
 } from "../services/fx2Hardware";
+import type { EegSample, EegSessionSummary } from "../types/eegRecorder";
 import type { DeviceMode, Fx2BinaryFrame, Fx2IncomingMessage, Fx2State } from "../types/fx2";
 
 type DemoPreset = "balanced" | "weakSignal" | "notWorn" | "disconnected" | "reset";
@@ -51,12 +53,17 @@ interface Fx2RealtimeContextValue {
   hardwareStatus: Fx2HardwareStatus;
   hardwareDetail: string;
   hardwareDiagnostics: Fx2HardwareDiagnostics;
+  recorderSummary: EegSessionSummary;
   setSelectedMode: (mode: DeviceMode) => void;
   startSession: (modeOverride?: DeviceMode) => Promise<boolean>;
   stopSession: () => void;
   disconnectHardware: () => void;
   pushManualUpdate: (patch: Partial<Fx2IncomingMessage>) => boolean;
   applyPreset: (preset: DemoPreset) => void;
+  appendSample: (sample: EegSample) => void;
+  exportCsv: () => void;
+  exportJson: () => void;
+  clearRecording: () => void;
 }
 
 const Fx2RealtimeContext = createContext<Fx2RealtimeContextValue | null>(null);
@@ -123,6 +130,11 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const stateRef = useRef(state);
   const pendingHardwareRef = useRef<Fx2IncomingMessage[]>([]);
   const hardwareRafRef = useRef<number | null>(null);
+  const recorderRef = useRef(new EegSessionRecorder());
+  const recTickRef = useRef<number | null>(null);
+  const [recorderSummary, setRecorderSummary] = useState<EegSessionSummary>(
+    () => recorderRef.current.getSummary()
+  );
 
   useEffect(() => {
     stateRef.current = state;
@@ -195,6 +207,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       if (hardwareRafRef.current !== null) {
         cancelAnimationFrame(hardwareRafRef.current);
       }
+      if (recTickRef.current !== null) {
+        window.clearInterval(recTickRef.current);
+      }
       void hardwareRef.current.disconnect();
     };
   }, []);
@@ -203,6 +218,20 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     if (mockTimerRef.current !== null) {
       window.clearInterval(mockTimerRef.current);
       mockTimerRef.current = null;
+    }
+  };
+
+  const startRecTick = () => {
+    if (recTickRef.current !== null) return;
+    recTickRef.current = window.setInterval(() => {
+      setRecorderSummary(recorderRef.current.getSummary());
+    }, 500);
+  };
+
+  const stopRecTick = () => {
+    if (recTickRef.current !== null) {
+      window.clearInterval(recTickRef.current);
+      recTickRef.current = null;
     }
   };
 
@@ -229,6 +258,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     resetState(nextMode);
     setSessionPhase("running");
 
+    recorderRef.current.startRecording(nextMode);
+    setRecorderSummary(recorderRef.current.getSummary());
+    startRecTick();
+
     if (nextMode === "demo") {
       await hardwareRef.current.disconnect();
       mockTimerRef.current = window.setInterval(() => {
@@ -249,6 +282,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       connected: false,
       logs: appendLog(prev.logs, "측정을 종료했습니다.")
     }));
+    recorderRef.current.stopRecording();
+    stopRecTick();
+    setRecorderSummary(recorderRef.current.getSummary());
   };
 
   const pushManualUpdate = (patch: Partial<Fx2IncomingMessage>) => {
@@ -315,6 +351,27 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       connected: false,
       logs: appendLog(prev.logs, "장치 연결을 해제했습니다.")
     }));
+    recorderRef.current.stopRecording();
+    stopRecTick();
+    setRecorderSummary(recorderRef.current.getSummary());
+  };
+
+  const appendSample = (sample: EegSample) => {
+    recorderRef.current.appendSample(sample);
+  };
+
+  const exportCsv = () => {
+    recorderRef.current.exportCsv();
+  };
+
+  const exportJson = () => {
+    recorderRef.current.exportJson();
+  };
+
+  const clearRecording = () => {
+    recorderRef.current.clearRecording();
+    stopRecTick();
+    setRecorderSummary(recorderRef.current.getSummary());
   };
 
   const setSelectedMode = (mode: DeviceMode) => {
@@ -331,17 +388,23 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       hardwareStatus,
       hardwareDetail,
       hardwareDiagnostics,
+      recorderSummary,
       setSelectedMode,
       startSession,
       stopSession,
       disconnectHardware,
       pushManualUpdate,
-      applyPreset
+      applyPreset,
+      appendSample,
+      exportCsv,
+      exportJson,
+      clearRecording,
     }),
     [
       hardwareDetail,
       hardwareDiagnostics,
       hardwareStatus,
+      recorderSummary,
       selectedMode,
       sessionPhase,
       state,

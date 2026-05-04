@@ -44,7 +44,7 @@ function SummaryMetric({
 
 export default function SummaryPage() {
   const navigate = useNavigate();
-  const { state, summary, selectedMode, startSession } = useFx2RealtimeSession();
+  const { state, summary, selectedMode, startSession, recorderSummary, exportCsv, exportJson } = useFx2RealtimeSession();
 
   const averageBpm = summary.averageHeartRate || state.heartRate;
   const minBpm = state.stats.minHeartRate || state.heartRate;
@@ -165,6 +165,33 @@ export default function SummaryPage() {
             </span>
           </div>
         </div>
+
+        {recorderSummary.hasRecording ? (
+          <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-800/40 dark:bg-green-500/5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-green-700 dark:text-green-400">
+              기록된 데이터
+            </p>
+            <p className="mt-1.5 text-xs text-[#6B7280] dark:text-slate-400">
+              {recorderSummary.sampleCount.toLocaleString()}샘플 · 차트에서 사라진 데이터도 포함됩니다
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="rounded-xl bg-green-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                CSV 저장
+              </button>
+              <button
+                type="button"
+                onClick={exportJson}
+                className="rounded-xl bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                JSON 저장
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-6 grid gap-2">
           <button

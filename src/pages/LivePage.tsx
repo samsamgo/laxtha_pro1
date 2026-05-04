@@ -10,7 +10,6 @@ import HiddenDemoPanel from "../components/HiddenDemoPanel";
 import LineChartCard from "../components/LineChartCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
-import { useEegSessionRecorder } from "../hooks/useEegSessionRecorder";
 import type { ExtWindowSeconds } from "../types/eegRecorder";
 
 const formatDuration = (seconds: number) => {
@@ -37,7 +36,6 @@ const formatDiagnosticNumber = (value: number | null, suffix = "") =>
 const modeLabelMap: Record<string, string> = {
   omc: "OMC-M10",
   demo: "DEMO",
-  uart: "UART",
 };
 
 const wearLabel = {
@@ -125,11 +123,16 @@ export default function LivePage() {
     hardwareStatus,
     hardwareDetail,
     hardwareDiagnostics,
+    recorderSummary,
     startSession,
     stopSession,
     disconnectHardware,
     pushManualUpdate,
     applyPreset,
+    appendSample,
+    exportCsv,
+    exportJson,
+    clearRecording,
   } = useFx2RealtimeSession();
   const { chartTheme } = useFx2Theme();
 
@@ -153,18 +156,7 @@ export default function LivePage() {
   const autoSaveCsvRef = useRef(autoSaveCsv);
   useEffect(() => { autoSaveCsvRef.current = autoSaveCsv; }, [autoSaveCsv]);
 
-  // EEG session recorder (samples stored outside React state)
-  const {
-    summary: recSummary,
-    startRecording,
-    stopRecording,
-    clearRecording,
-    appendSample,
-    exportCsv,
-    exportJson,
-  } = useEegSessionRecorder();
-
-  // Track session phase transitions → start/stop recording
+  // Track session phase transitions — recorder lifecycle is handled in context
   useEffect(() => {
     const prev = prevPhaseRef.current;
     prevPhaseRef.current = sessionPhase;
@@ -173,15 +165,12 @@ export default function LivePage() {
 
     if (sessionPhase === "running") {
       sessionStartTsRef.current = Date.now();
-      startRecording(selectedMode);
     } else if (sessionPhase === "stopped" && prev === "running") {
-      stopRecording();
       if (autoSaveCsvRef.current) {
-        // stopRecording() is synchronous; exportCsv reads the already-captured samples
         setTimeout(() => exportCsv(), 50);
       }
     }
-  }, [sessionPhase, selectedMode, startRecording, stopRecording, exportCsv]);
+  }, [sessionPhase, exportCsv]);
 
   // Append one sample per state update (each new data point)
   const prevTimestampLengthRef = useRef(state.timestamps.length);
@@ -403,17 +392,17 @@ export default function LivePage() {
               ) : null}
 
               {/* REC indicator — visible while running */}
-              {isRunning && recSummary.isRecording ? (
+              {isRunning && recorderSummary.isRecording ? (
                 <div className="flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 dark:bg-red-500/10">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" />
                   <span className="text-xs font-semibold text-red-600 dark:text-red-300">
                     기록 중
                   </span>
                   <span className="text-xs text-red-500 dark:text-red-400">
-                    {formatMs(recSummary.durationMs)}
+                    {formatMs(recorderSummary.durationMs)}
                   </span>
                   <span className="text-xs text-red-400 dark:text-red-500">
-                    {recSummary.sampleCount.toLocaleString()}샘플
+                    {recorderSummary.sampleCount.toLocaleString()}샘플
                   </span>
                 </div>
               ) : null}
@@ -611,15 +600,15 @@ export default function LivePage() {
         ) : null}
 
         {/* Export section — shown after session ends if recording exists */}
-        {isStopped && recSummary.hasRecording ? (
+        {isStopped && recorderSummary.hasRecording ? (
           <section className="fx2-card fx2-outline border-l-4 border-l-green-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="fx2-title">데이터 저장</h2>
                 <p className="mt-1 text-xs text-[#6B7280] dark:text-slate-400">
-                  기록 시간 {formatMs(recSummary.durationMs)} · {recSummary.sampleCount.toLocaleString()}샘플 전체 포함
-                  {recSummary.startedAt
-                    ? ` · ${new Date(recSummary.startedAt).toLocaleTimeString("ko-KR")} 시작`
+                  기록 시간 {formatMs(recorderSummary.durationMs)} · {recorderSummary.sampleCount.toLocaleString()}샘플 전체 포함
+                  {recorderSummary.startedAt
+                    ? ` · ${new Date(recorderSummary.startedAt).toLocaleTimeString("ko-KR")} 시작`
                     : null}
                 </p>
                 <p className="mt-0.5 text-xs text-green-600 dark:text-green-400">

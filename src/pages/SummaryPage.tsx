@@ -42,6 +42,14 @@ function SummaryMetric({
   );
 }
 
+const formatMs = (ms: number) => {
+  const s = Math.floor(ms / 1000);
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+};
+
 export default function SummaryPage() {
   const navigate = useNavigate();
   const { state, summary, selectedMode, startSession, recorderSummary, exportCsv, exportJson } = useFx2RealtimeSession();
@@ -49,6 +57,11 @@ export default function SummaryPage() {
   const averageBpm = summary.averageHeartRate || state.heartRate;
   const minBpm = state.stats.minHeartRate || state.heartRate;
   const maxBpm = state.stats.maxHeartRate || state.heartRate;
+
+  const validRr = state.rrInterval.filter((r) => r > 0);
+  const minRr = validRr.length > 0 ? Math.min(...validRr) : 0;
+  const maxRr = validRr.length > 0 ? Math.max(...validRr) : 0;
+  const avgRr = validRr.length > 0 ? Math.round(validRr.reduce((a, b) => a + b, 0) / validRr.length) : 0;
 
   const handleRestart = () => {
     startSession();
@@ -102,7 +115,7 @@ export default function SummaryPage() {
           <SummaryMetric label="신호 안정도" value={`${summary.stabilityScore}%`} />
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div className="fx2-surface rounded-2xl border border-[#E5EBF4] p-4 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-[#111827] dark:text-white">
               채널 해석
@@ -166,6 +179,40 @@ export default function SummaryPage() {
               </li>
             </ul>
           </div>
+
+          {validRr.length > 0 ? (
+            <div className="fx2-surface rounded-2xl border border-[#E5EBF4] p-4 dark:border-slate-700">
+              <h3 className="text-sm font-semibold text-[#111827] dark:text-white">
+                RR 간격 (HRV)
+              </h3>
+              <ul className="mt-3 space-y-2 text-xs text-[#6B7280] dark:text-slate-400">
+                <li>
+                  평균 RR:{" "}
+                  <span className="font-semibold text-[#111827] dark:text-white">
+                    {avgRr} ms
+                  </span>
+                </li>
+                <li>
+                  최소 RR:{" "}
+                  <span className="font-semibold text-[#111827] dark:text-white">
+                    {minRr} ms
+                  </span>
+                </li>
+                <li>
+                  최대 RR:{" "}
+                  <span className="font-semibold text-[#111827] dark:text-white">
+                    {maxRr} ms
+                  </span>
+                </li>
+                <li>
+                  샘플 수:{" "}
+                  <span className="font-semibold text-[#111827] dark:text-white">
+                    {validRr.length.toLocaleString()}
+                  </span>
+                </li>
+              </ul>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -184,12 +231,28 @@ export default function SummaryPage() {
               {state.heartRate} bpm
             </span>
           </div>
-          <div className="flex items-center justify-between py-3 last:pb-0">
+          <div className="flex items-center justify-between py-3">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">마지막 갱신</span>
             <span className="text-xs font-semibold text-[#111827] dark:text-white">
               {new Date(state.lastUpdated).toLocaleTimeString("ko-KR")}
             </span>
           </div>
+          {recorderSummary.startedAt ? (
+            <div className="flex items-center justify-between py-3">
+              <span className="text-xs text-[#6B7280] dark:text-slate-400">세션 시작</span>
+              <span className="text-xs font-semibold text-[#111827] dark:text-white">
+                {new Date(recorderSummary.startedAt).toLocaleTimeString("ko-KR")}
+              </span>
+            </div>
+          ) : null}
+          {recorderSummary.durationMs > 0 ? (
+            <div className="flex items-center justify-between py-3 last:pb-0">
+              <span className="text-xs text-[#6B7280] dark:text-slate-400">녹화 시간</span>
+              <span className="text-xs font-semibold text-[#111827] dark:text-white">
+                {formatMs(recorderSummary.durationMs)}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {recorderSummary.hasRecording ? (

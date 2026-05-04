@@ -373,6 +373,23 @@ function EEGChartV2({
     snapToLive(true);
   }, [snapToLive]);
 
+  // Keyboard shortcuts: Space = pause/resume, L = go live
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "SELECT") return;
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        onPauseToggle();
+      } else if (e.key === "l" || e.key === "L") {
+        e.preventDefault();
+        snapToLive(true);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onPauseToggle, snapToLive]);
+
   // Cleanup: stop recording on unmount
   useEffect(() => {
     return () => {

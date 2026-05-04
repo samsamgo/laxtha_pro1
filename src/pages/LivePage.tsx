@@ -704,7 +704,7 @@ export default function LivePage() {
               <strong>두 손가락 핀치로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택
             </span>
             <span className="hidden sm:inline">
-              <strong>마우스 휠로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택
+              <strong>마우스 휠로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택 · <kbd className="rounded bg-slate-200 px-1 text-[9px] dark:bg-slate-700">Space</kbd> 일시정지 · <kbd className="rounded bg-slate-200 px-1 text-[9px] dark:bg-slate-700">L</kbd> 라이브
             </span>
           </p>
         </div>

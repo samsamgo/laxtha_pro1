@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Link } from "react-router-dom";
 import EEGChartV2 from "../components/EEGChartV2";
 import HiddenDemoPanel from "../components/HiddenDemoPanel";
 import LineChartCard from "../components/LineChartCard";
@@ -32,6 +33,18 @@ const formatHexByte = (value: number | null) =>
 
 const formatDiagnosticNumber = (value: number | null, suffix = "") =>
   value === null ? "—" : `${value}${suffix}`;
+
+const getBpmValueClassName = (bpm: number): string => {
+  if (bpm < 50 || bpm > 130) return "text-[#EF4444] dark:text-red-400";
+  if (bpm < 60 || bpm > 100) return "text-[#F59E0B] dark:text-amber-400";
+  return "text-[#111827] dark:text-white";
+};
+
+const getSignalBarClassName = (quality: number): string => {
+  if (quality >= 90) return "bg-[#22C55E]";
+  if (quality >= 60) return "bg-[#F59E0B]";
+  return "bg-[#EF4444]";
+};
 
 const modeLabelMap: Record<string, string> = {
   serial: "Web Serial",
@@ -92,6 +105,7 @@ interface CompactStatusItemProps {
   value: string;
   iconClassName: string;
   valueClassName?: string;
+  children?: ReactNode;
 }
 
 function CompactStatusItem({
@@ -100,15 +114,17 @@ function CompactStatusItem({
   value,
   iconClassName,
   valueClassName = "text-[#111827] dark:text-white",
+  children,
 }: CompactStatusItemProps) {
   return (
     <div className="fx2-card fx2-outline flex items-center gap-3 px-4 py-3">
       <span className={`inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${iconClassName}`}>
         {icon}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className={`text-2xl font-bold leading-none ${valueClassName}`}>{value}</p>
         <p className="mt-1 text-xs uppercase tracking-wide text-[#6B7280] dark:text-slate-400">{label}</p>
+        {children}
       </div>
     </div>
   );
@@ -299,6 +315,7 @@ export default function LivePage() {
                 label="심박수"
                 value={`${state.heartRate}`}
                 iconClassName="bg-red-50 text-[#EF4444] dark:bg-red-500/10 dark:text-red-300"
+                valueClassName={getBpmValueClassName(state.heartRate)}
               />
               <CompactStatusItem
                 icon={<WearIcon />}
@@ -337,7 +354,14 @@ export default function LivePage() {
                     ? "text-[#F59E0B] dark:text-amber-300"
                     : "text-[#EF4444] dark:text-red-300"
                 }
-              />
+              >
+                <div className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${getSignalBarClassName(state.signalQuality)}`}
+                    style={{ width: `${Math.min(100, Math.max(0, state.signalQuality))}%` }}
+                  />
+                </div>
+              </CompactStatusItem>
               <CompactStatusItem
                 icon={<TimeIcon />}
                 label="세션시간"
@@ -601,6 +625,16 @@ export default function LivePage() {
 
         {/* Export section — shown after session ends if recording exists */}
         {isStopped && recorderSummary.hasRecording ? (
+          <div className="flex justify-end">
+            <Link
+              to="/summary"
+              className="inline-flex items-center gap-1 text-sm font-medium text-[#2563EB] hover:text-[#1D4ED8] dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            >
+              세션 요약 보기 →
+            </Link>
+          </div>
+        ) : null}
+        {isStopped && recorderSummary.hasRecording ? (
           <section className="fx2-card fx2-outline border-l-4 border-l-green-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -660,7 +694,12 @@ export default function LivePage() {
             onCh2Toggle={() => setCh2Visible((c) => !c)}
           />
           <p className="mt-1 text-center text-[10px] text-[#6B7280] dark:text-slate-500">
-            마우스 휠 / 두 손가락 핀치로 줌 · 드래그로 이동 · 시간창 버튼으로 범위 선택
+            <span className="sm:hidden">
+              <strong>두 손가락 핀치로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택
+            </span>
+            <span className="hidden sm:inline">
+              <strong>마우스 휠로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택
+            </span>
           </p>
         </div>
 

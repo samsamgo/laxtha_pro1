@@ -70,7 +70,9 @@ function SidebarSummary({
         </div>
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span>안정도 점수</span>
-          <span className="font-semibold text-slate-100">{stabilityScore}%</span>
+          <span className="font-semibold text-slate-100">
+            {stabilityScore === 0 ? "—" : `${stabilityScore}%`}
+          </span>
         </div>
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span>세션 시간</span>
@@ -202,9 +204,34 @@ export default function Layout({ children, title }: LayoutProps) {
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="w-full rounded-xl bg-[#1E293B] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors duration-200 hover:bg-slate-700"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1E293B] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors duration-200 hover:bg-slate-700"
           >
-            {darkMode ? "라이트 모드" : "다크 모드"}
+            {darkMode ? (
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-yellow-300"
+                >
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+                </svg>
+                라이트 모드
+              </>
+            ) : (
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-slate-300"
+                >
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
+                </svg>
+                다크 모드
+              </>
+            )}
           </button>
           <SidebarSummary
             averageBpm={averageBpm}

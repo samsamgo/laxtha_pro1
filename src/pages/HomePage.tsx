@@ -116,12 +116,17 @@ export default function HomePage() {
               const unsupported =
                 item.key === "serial" && !serialSupported;
 
+              const showConnectedDot =
+                active && hardwareStatus === "connected";
+              const showErrorDot =
+                active && hardwareStatus === "error";
+
               return (
                 <button
                   key={item.key}
                   type="button"
                   onClick={() => setSelectedMode(item.key)}
-                  className={`rounded-2xl border p-4 text-left transition-all duration-200 ${
+                  className={`relative rounded-2xl border p-4 text-left transition-all duration-200 ${
                     active
                       ? "border-[#2563EB] ring-2 ring-[#2563EB] shadow-md"
                       : "border-transparent bg-[#EAF0F8] hover:shadow-md dark:bg-slate-800"
@@ -131,6 +136,11 @@ export default function HomePage() {
                       : "dark:text-slate-100"
                   }`}
                 >
+                  {showConnectedDot ? (
+                    <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-[#22C55E] shadow-sm" />
+                  ) : showErrorDot ? (
+                    <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-[#EF4444] shadow-sm" />
+                  ) : null}
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-[#111827] dark:text-white">
                       {item.title}
@@ -199,6 +209,11 @@ export default function HomePage() {
             "실시간 측정 시작"
           )}
         </button>
+        <p className="mt-2 text-[11px] text-[#9CA3AF] dark:text-slate-500">
+          {selectedMode === "demo"
+            ? "바로 시작 가능"
+            : "브라우저에서 장치를 선택한 후 연결됩니다"}
+        </p>
       </section>
 
       <section className="fx2-card fx2-outline lg:col-span-4">
@@ -232,7 +247,13 @@ export default function HomePage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">심박수</span>
-            <span className="text-xs font-semibold text-[#111827] dark:text-white">
+            <span
+              className={`text-base font-bold ${
+                selectedMode === "demo" || state.heartRate > 0
+                  ? "text-[#22C55E]"
+                  : "text-[#111827] dark:text-white"
+              }`}
+            >
               {state.heartRate} bpm
             </span>
           </div>

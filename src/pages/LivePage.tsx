@@ -805,6 +805,7 @@ export default function LivePage() {
             title="PPG 추이"
             subtitle={`최근 ${state.ppg[state.ppg.length - 1]?.toFixed(2) ?? "0.00"} · 맥파 원신호`}
             values={state.ppg}
+            timestamps={state.timestamps}
             color="#10B981"
           />
 
@@ -812,6 +813,7 @@ export default function LivePage() {
             title="sdPPG 추이"
             subtitle={`최근 ${state.sdppg[state.sdppg.length - 1]?.toFixed(2) ?? "0.00"} · 2차 미분 맥파`}
             values={state.sdppg}
+            timestamps={state.timestamps}
             color="#F59E0B"
           />
 

@@ -16,20 +16,61 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler);
 interface LineChartCardProps {
   title: string;
   values: number[];
+  timestamps?: number[];
   color: string;
   subtitle: string;
 }
 
 const MINI_CHART_MAX_POINTS = 300;
+const X_TICK_COUNT = 4;
 
-const downsample = (values: number[], maxPoints: number): number[] => {
-  if (values.length <= maxPoints) return values;
+const formatTime = (ms: number) =>
+  new Date(ms).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+const downsample = (
+  values: number[],
+  maxPoints: number,
+  timestamps?: number[],
+): { values: number[]; labels: string[] } => {
+  const hasTs = !!timestamps && timestamps.length === values.length;
+
+  const buildLabels = (ts: number[]): string[] => {
+    const n = ts.length;
+    if (n === 0) return [];
+    const step = Math.max(1, Math.floor(n / X_TICK_COUNT));
+    return ts.map((t, i) =>
+      i === 0 || i === n - 1 || i % step === 0 ? formatTime(t) : "",
+    );
+  };
+
+  if (values.length <= maxPoints) {
+    return {
+      values,
+      labels: hasTs ? buildLabels(timestamps!) : values.map((_, i) => String(i)),
+    };
+  }
+
   const step = Math.ceil(values.length / maxPoints);
-  const result: number[] = [];
-  for (let i = 0; i < values.length; i += step) result.push(values[i]);
+  const dsValues: number[] = [];
+  const dsTs: number[] = [];
+  for (let i = 0; i < values.length; i += step) {
+    dsValues.push(values[i]);
+    if (hasTs) dsTs.push(timestamps![i]);
+  }
   const last = values[values.length - 1];
-  if (result[result.length - 1] !== last) result.push(last);
-  return result;
+  if (dsValues[dsValues.length - 1] !== last) {
+    dsValues.push(last);
+    if (hasTs) dsTs.push(timestamps![timestamps!.length - 1]);
+  }
+
+  return {
+    values: dsValues,
+    labels: hasTs ? buildLabels(dsTs) : dsValues.map((_, i) => String(i)),
+  };
 };
 
 const hexToRgba = (hex: string, alpha: number): string => {
@@ -39,13 +80,15 @@ const hexToRgba = (hex: string, alpha: number): string => {
   return `rgba(${r},${g},${b},${alpha})`;
 };
 
-function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
+function LineChartCard({ title, values, timestamps, color, subtitle }: LineChartCardProps) {
   const { darkMode } = useFx2Theme();
   const latestValue = values[values.length - 1] ?? 0;
+  const hasTimestamps = !!timestamps && timestamps.length === values.length && values.length > 0;
 
-  const displayValues = useMemo(
-    () => (values.length === 0 ? [] : downsample(values, MINI_CHART_MAX_POINTS)),
-    [values]
+  const { values: displayValues, labels: displayLabels } = useMemo(
+    () => (values.length === 0 ? { values: [], labels: [] } : downsample(values, MINI_CHART_MAX_POINTS, timestamps)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [values, timestamps]
   );
 
   const gridColor = darkMode ? "#334155" : "#F1F5F9";
@@ -53,7 +96,7 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
 
   const data = useMemo(
     () => ({
-      labels: displayValues.map((_, i) => i),
+      labels: displayLabels,
       datasets: [
         {
           data: displayValues,
@@ -66,7 +109,7 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
         },
       ],
     }),
-    [displayValues, color]
+    [displayValues, displayLabels, color]
   );
 
   const options = useMemo<ChartOptions<"line">>(
@@ -80,8 +123,15 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
       },
       scales: {
         x: {
-          display: false,
-          grid: { color: gridColor },
+          display: hasTimestamps,
+          grid: { display: false },
+          ticks: {
+            color: textColor,
+            font: { size: 9 },
+            maxRotation: 0,
+            autoSkip: false,
+          },
+          border: { display: false },
         },
         y: {
           display: true,
@@ -96,7 +146,7 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
         },
       },
     }),
-    [gridColor, textColor]
+    [gridColor, textColor, hasTimestamps]
   );
 
   return (

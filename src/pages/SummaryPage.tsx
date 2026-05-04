@@ -55,6 +55,32 @@ export default function SummaryPage() {
     navigate("/live");
   };
 
+  const hasData = state.stats.sampleCount > 0;
+
+  if (!hasData) {
+    return (
+      <div className="fx2-card fx2-outline flex flex-col items-center justify-center gap-5 py-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0F8] dark:bg-slate-800">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-8 w-8 text-[#6B7280] dark:text-slate-400">
+            <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+            <path d="M15 7h2a5 5 0 0 1 0 10h-2" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-lg font-semibold text-[#111827] dark:text-white">아직 세션 데이터가 없습니다</p>
+          <p className="mt-1 text-sm text-[#6B7280] dark:text-slate-400">측정을 시작하고 종료하면 이 페이지에서 요약을 확인할 수 있습니다.</p>
+        </div>
+        <Link
+          to="/live"
+          className="rounded-xl bg-[#2563EB] px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          실시간 측정 시작
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
       <section className="fx2-card fx2-outline lg:col-span-8">

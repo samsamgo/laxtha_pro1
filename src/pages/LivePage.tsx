@@ -394,6 +394,7 @@ export default function LivePage() {
                     style={{ width: `${Math.min(100, Math.max(0, state.signalQuality))}%` }}
                   />
                 </div>
+                <MiniSparkline values={state.signalQualityHistory} color="#22C55E" />
               </CompactStatusItem>
               <CompactStatusItem
                 icon={<TimeIcon />}

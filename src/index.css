@@ -11,6 +11,7 @@
 html {
   color-scheme: light;
   overflow-x: hidden;
+  overflow-y: scroll; /* prevents layout shift from scrollbar appearing/disappearing */
   scroll-behavior: smooth;
 }
 

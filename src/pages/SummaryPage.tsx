@@ -4,7 +4,6 @@ import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 const modeLabelMap: Record<string, string> = {
   omc: "OMC-M10",
   demo: "DEMO",
-  uart: "UART",
 };
 
 const formatDuration = (seconds: number) => {

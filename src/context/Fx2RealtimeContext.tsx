@@ -211,11 +211,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     setHardwareDiagnostics(createInitialHardwareDiagnostics());
   };
 
-  const connectHardware = async (mode: Extract<DeviceMode, "omc" | "uart">) => {
-    const connected =
-      mode === "omc"
-        ? await hardwareRef.current.connectOmc()
-        : await hardwareRef.current.connectUart();
+  const connectHardware = async () => {
+    const connected = await hardwareRef.current.connectOmc();
 
     if (!connected) {
       setSessionPhase("idle");
@@ -240,7 +237,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       return true;
     }
 
-    return connectHardware(nextMode);
+    return connectHardware();
   };
 
   const stopSession = () => {

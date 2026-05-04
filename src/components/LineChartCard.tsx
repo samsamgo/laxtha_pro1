@@ -116,7 +116,7 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
         </div>
       </header>
 
-      <div className="h-56 rounded-2xl bg-transparent p-1">
+      <div className="h-56 overflow-hidden rounded-2xl bg-transparent p-1">
         <Line data={data} options={options} />
       </div>
     </section>

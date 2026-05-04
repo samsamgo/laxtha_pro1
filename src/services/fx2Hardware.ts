@@ -11,7 +11,7 @@ export type Fx2HardwareStatus =
 
 export type Fx2HardwareEvent =
   | { type: "status"; status: Fx2HardwareStatus; detail?: string }
-  | { type: "packet"; mode: "uart"; frame: Fx2BinaryFrame };
+  | { type: "packet"; mode: "omc"; frame: Fx2BinaryFrame };
 
 interface UartConnectOptions {
   baudRate?: number;
@@ -81,7 +81,7 @@ export class Fx2HardwareService {
     return this.connectUart({ forcePrompt: true });
   }
 
-  async connectUart(options: UartConnectOptions = {}) {
+  private async connectUart(options: UartConnectOptions = {}) {
     if (typeof navigator === "undefined" || !("serial" in navigator)) {
       this.setStatus("unsupported", "This browser does not support Web Serial.");
       return false;
@@ -179,7 +179,7 @@ export class Fx2HardwareService {
         continue;
       }
       const frameBytes = this.binaryBuffer.splice(0, 20);
-      this.emit({ type: "packet", mode: "uart", frame: this.parseBinaryFrame(frameBytes) });
+      this.emit({ type: "packet", mode: "omc", frame: this.parseBinaryFrame(frameBytes) });
     }
   }
 

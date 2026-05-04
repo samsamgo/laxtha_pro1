@@ -23,20 +23,14 @@ const modeCards: Array<{
 }> = [
   {
     key: "demo",
-    title: "Demo",
-    body: "브라우저 내부에서 로컬 mock 신호를 만들어 UI와 차트를 빠르게 확인합니다.",
+    title: "Demo 모드",
+    body: "브라우저 내부에서 mock 신호를 만들어 UI와 차트를 빠르게 확인합니다.",
     badge: "로컬 시뮬레이션",
   },
   {
     key: "omc",
-    title: "OMC-M10 Serial",
-    body: "Bluetooth SPP 장치가 Windows COM 포트로 보이면 Chrome Web Serial로 엽니다.",
-    badge: "Web Serial",
-  },
-  {
-    key: "uart",
-    title: "UART",
-    body: "일반 USB-UART 바이너리 스트림을 Chrome Web Serial로 엽니다.",
+    title: "OMC-M10 연결",
+    body: "Bluetooth SPP 또는 USB-UART 장치를 Chrome Web Serial로 연결합니다. 모든 직렬 장치에 사용하세요.",
     badge: "Web Serial",
   },
 ];
@@ -53,7 +47,6 @@ const hardwareLabelMap = {
 const modeLabelMap: Record<string, string> = {
   demo: "DEMO",
   omc: "OMC-M10",
-  uart: "UART",
 };
 
 export default function HomePage() {
@@ -85,11 +78,6 @@ export default function HomePage() {
     if (selectedMode === "omc" && !serialSupported) {
       return "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
     }
-
-    if (selectedMode === "uart" && !serialSupported) {
-      return "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
-    }
-
     return null;
   }, [selectedMode, serialSupported]);
 
@@ -129,8 +117,7 @@ export default function HomePage() {
             {modeCards.map((item) => {
               const active = item.key === selectedMode;
               const unsupported =
-                (item.key === "omc" && !serialSupported) ||
-                (item.key === "uart" && !serialSupported);
+                item.key === "omc" && !serialSupported;
 
               return (
                 <button
@@ -181,9 +168,7 @@ export default function HomePage() {
           <p className="mt-2 text-xs leading-5 text-[#6B7280] dark:text-slate-400">
             {selectedMode === "demo"
               ? "브라우저 내부 generator가 1초 간격으로 데모 신호를 보냅니다."
-              : selectedMode === "omc"
-              ? "OMC-M10 Bluetooth 직렬 포트를 Web Serial로 엽니다."
-              : "UART 권한 승인 후 115200 8N1 바이너리 프레임을 표시합니다."}
+              : "Bluetooth SPP 또는 USB-UART 포트를 Web Serial로 열고 LXSDF T2A 이진 프레임을 수신합니다."}
           </p>
           {hardwareDetail ? (
             <p className="mt-2 text-xs leading-5 text-[#6B7280] dark:text-slate-400">

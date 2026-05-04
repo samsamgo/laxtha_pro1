@@ -1,4 +1,4 @@
-export type DeviceMode = "demo" | "omc" | "uart";
+export type DeviceMode = "demo" | "omc";
 export type WearStatus = "worn" | "unstable" | "not_worn";
 export type SignalStatus = "good" | "normal" | "poor";
 

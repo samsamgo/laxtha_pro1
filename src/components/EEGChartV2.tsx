@@ -269,6 +269,8 @@ function EEGChartV2({
   const displayDataRef = useRef<uPlot.AlignedData>(chartData);
   const bufferedDataRef = useRef<uPlot.AlignedData | null>(null);
   const windowSecondsRef = useRef<ExtWindowSeconds>(windowSeconds);
+  // Custom zoom level overrides windowSeconds while scrolling; null = use windowSeconds
+  const zoomedWindowRef = useRef<number | null>(null);
   const latestLiveSecondRef = useRef<number | null>(getLatestSecond(chartData));
   const visibleRangeRef = useRef<VisibleRange | null>(null);
   const atLiveEdgeRef = useRef(true);
@@ -347,14 +349,23 @@ function EEGChartV2({
       if (!chart || latestSecond === null) return;
       if (!force && !atLiveEdgeRef.current) return;
 
-      const min = Math.max(latestSecond - windowSecondsRef.current, 0);
+      // Use zoomed window width if user has scroll-zoomed; fall back to selected windowSeconds
+      const ws = zoomedWindowRef.current ?? windowSecondsRef.current;
+      const min = Math.max(latestSecond - ws, 0);
       setVisibleRange(chart, min, latestSecond);
       atLiveEdgeRef.current = true;
       setShowLiveButton(false);
-      setShowZoomReset(false);
+      // Keep showZoomReset if a custom zoom is active
+      setShowZoomReset(zoomedWindowRef.current !== null);
     },
     [setVisibleRange]
   );
+
+  const resetZoom = useCallback(() => {
+    zoomedWindowRef.current = null;
+    setShowZoomReset(false);
+    snapToLive(true);
+  }, [snapToLive]);
 
   // Cleanup: stop recording on unmount
   useEffect(() => {
@@ -365,7 +376,8 @@ function EEGChartV2({
     };
   }, []);
 
-  // Wheel scroll zoom: pinch/scroll to zoom the x axis around the cursor
+  // Wheel scroll zoom: adjusts the displayed time window width while keeping live-follow active.
+  // This avoids the "chart freezes" issue where losing live-edge stops data from updating.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -379,23 +391,25 @@ function EEGChartV2({
       const xMax = chart.scales.x.max;
       if (xMin === undefined || xMax === undefined) return;
 
+      const currentRange = xMax - xMin; // seconds currently visible
       const zoomFactor = e.deltaY > 0 ? 1.25 : 0.8;
-      const cursorVal = chart.posToVal(e.offsetX, "x");
-      const newMin = cursorVal - (cursorVal - xMin) * zoomFactor;
-      const newMax = cursorVal + (xMax - cursorVal) * zoomFactor;
+      const newRange = Math.max(2, Math.min(currentRange * zoomFactor, 7200)); // clamp 2s–2h
 
-      isProgrammaticScaleRef.current = true;
-      chart.setScale("x", { min: newMin, max: newMax });
-      isProgrammaticScaleRef.current = false;
-      visibleRangeRef.current = { min: newMin, max: newMax };
-
-      const latestSecond = latestLiveSecondRef.current;
-      if (latestSecond !== null) {
-        const isAtEdge = newMax >= latestSecond - 0.25;
-        atLiveEdgeRef.current = isAtEdge;
-        setShowLiveButton(!isAtEdge);
-      }
+      // Store the new window width and snap to live with it — live-follow stays active
+      zoomedWindowRef.current = newRange;
       setShowZoomReset(true);
+
+      // Apply immediately without waiting for the next data tick
+      const latestSecond = latestLiveSecondRef.current;
+      if (latestSecond !== null && chart) {
+        const newMin = Math.max(latestSecond - newRange, 0);
+        isProgrammaticScaleRef.current = true;
+        chart.setScale("x", { min: newMin, max: latestSecond });
+        isProgrammaticScaleRef.current = false;
+        visibleRangeRef.current = { min: newMin, max: latestSecond };
+        atLiveEdgeRef.current = true;
+        setShowLiveButton(false);
+      }
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
@@ -558,7 +572,12 @@ function EEGChartV2({
 
   useEffect(() => { chartRef.current?.setSeries(1, { show: ch1Visible }); }, [ch1Visible]);
   useEffect(() => { chartRef.current?.setSeries(2, { show: ch2Visible }); }, [ch2Visible]);
-  useEffect(() => { snapToLive(true); }, [snapToLive, windowSeconds]);
+  useEffect(() => {
+    // User selected a new time window — clear any scroll-zoom override
+    zoomedWindowRef.current = null;
+    setShowZoomReset(false);
+    snapToLive(true);
+  }, [snapToLive, windowSeconds]);
 
   const handleWindowSelect = useCallback(
     (value: ExtWindowSeconds) => {
@@ -678,8 +697,8 @@ function EEGChartV2({
               {showZoomReset ? (
                 <button
                   type="button"
-                  onClick={() => snapToLive(true)}
-                  title="줌 초기화 및 라이브로 이동"
+                  onClick={resetZoom}
+                  title="줌 초기화 — 선택한 시간창으로 복귀"
                   className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors duration-200 hover:bg-amber-500 hover:text-white dark:bg-amber-500/15 dark:text-amber-300"
                 >
                   줌 초기화

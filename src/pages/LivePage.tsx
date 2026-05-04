@@ -126,6 +126,7 @@ export default function LivePage() {
     hardwareDetail,
     hardwareDiagnostics,
     startSession,
+    stopSession,
     disconnectHardware,
     pushManualUpdate,
     applyPreset,
@@ -390,6 +391,16 @@ export default function LivePage() {
                   ? "OMC-M10 연결 중..."
                   : "OMC-M10 연결"}
               </button>
+
+              {isRunning ? (
+                <button
+                  type="button"
+                  onClick={stopSession}
+                  className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
+                >
+                  측정 종료
+                </button>
+              ) : null}
 
               {/* REC indicator — visible while running */}
               {isRunning && recSummary.isRecording ? (

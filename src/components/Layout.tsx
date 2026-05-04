@@ -307,7 +307,7 @@ export default function Layout({ children, title }: LayoutProps) {
         </div>
       ) : null}
 
-      <main className="min-h-screen bg-[#F4F7FB] pt-20 transition-colors duration-300 dark:bg-slate-950 lg:ml-60">
+      <main className="min-h-screen overflow-x-hidden bg-[#F4F7FB] pt-20 transition-colors duration-300 dark:bg-slate-950 lg:ml-60">
         <div className="p-4 pb-24 sm:p-5 lg:pb-8">
           <h1 className="mb-5 text-2xl font-bold text-[#111827] dark:text-white lg:hidden">
             {title}

@@ -33,8 +33,8 @@ function SummaryMetric({
   value: string;
 }) {
   return (
-    <div className="fx2-surface rounded-2xl p-4">
-      <p className="text-xs uppercase tracking-wide text-[#6B7280] dark:text-slate-400">
+    <div className="fx2-surface rounded-2xl p-4 transition-shadow hover:shadow-md">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">
         {label}
       </p>
       <p className="mt-2 text-2xl font-bold text-[#111827] dark:text-white">{value}</p>
@@ -77,7 +77,7 @@ export default function SummaryPage() {
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="fx2-surface rounded-2xl p-4">
+          <div className="fx2-surface rounded-2xl border border-[#E5EBF4] p-4 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-[#111827] dark:text-white">
               채널 해석
             </h3>
@@ -109,7 +109,7 @@ export default function SummaryPage() {
             </ul>
           </div>
 
-          <div className="fx2-surface rounded-2xl p-4">
+          <div className="fx2-surface rounded-2xl border border-[#E5EBF4] p-4 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-[#111827] dark:text-white">
               상태 해석
             </h3>
@@ -145,20 +145,20 @@ export default function SummaryPage() {
 
       <section className="fx2-card fx2-outline lg:col-span-4">
         <h3 className="fx2-title mb-5">세션 정보</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="divide-y divide-[#E5EBF4] dark:divide-slate-700">
+          <div className="flex items-center justify-between py-3 first:pt-0">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">장치 모드</span>
             <span className="text-xs font-semibold text-[#111827] dark:text-white">
               {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
             </span>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between py-3">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">마지막 심박수</span>
             <span className="text-xs font-semibold text-[#111827] dark:text-white">
               {state.heartRate} bpm
             </span>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between py-3 last:pb-0">
             <span className="text-xs text-[#6B7280] dark:text-slate-400">마지막 갱신</span>
             <span className="text-xs font-semibold text-[#111827] dark:text-white">
               {new Date(state.lastUpdated).toLocaleTimeString("ko-KR")}

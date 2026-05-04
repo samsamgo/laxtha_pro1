@@ -30,7 +30,7 @@ const modeCards: Array<{
   {
     key: "omc",
     title: "OMC-M10 연결",
-    body: "Bluetooth SPP 또는 USB-UART 장치를 Chrome Web Serial로 연결합니다. 모든 직렬 장치에 사용하세요.",
+    body: "Bluetooth SPP 또는 USB-UART 장치를 Chrome Web Serial로 연결합니다. Chrome 또는 Edge 브라우저 필요.",
     badge: "Web Serial",
   },
 ];
@@ -99,21 +99,18 @@ export default function HomePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2563EB]">
           FX2 Neuro Feedback
         </p>
-        <h2 className="mt-3 text-3xl font-bold leading-tight text-[#111827] dark:text-white">
-          FX2 장치 또는 데모 모드로
-          <br />
-          실시간 뇌파 데이터를 시각화합니다
+        <h2 className="mt-3 text-2xl font-bold leading-tight text-[#111827] dark:text-white sm:text-3xl">
+          뇌파(EEG) 실시간 대시보드
         </h2>
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6B7280] dark:text-slate-400">
-          Demo 모드는 브라우저 내부 mock 생성기를 사용하고, OMC-M10과 UART는
-          Chrome 또는 Edge의 Web Serial 권한으로 실제 장치와 연결됩니다.
+        <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">
+          FX2 / OMC-M10 장치를 Web Serial로 연결하거나 Demo 모드로 체험하세요.
         </p>
 
         <div className="mt-8">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#6B7280] dark:text-slate-400">
             장치 모드
           </p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
             {modeCards.map((item) => {
               const active = item.key === selectedMode;
               const unsupported =
@@ -184,7 +181,7 @@ export default function HomePage() {
           type="button"
           onClick={handleStart}
           disabled={!selectedModeSupported || isConnecting}
-          className={`mt-8 inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-opacity duration-200 ${
+          className={`mt-8 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-bold text-white shadow-md transition-opacity duration-200 sm:w-auto sm:text-sm ${
             selectedModeSupported && !isConnecting
               ? "bg-[#2563EB] hover:opacity-90"
               : "cursor-not-allowed bg-gray-400 opacity-50"

@@ -44,7 +44,7 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
   const latestValue = values[values.length - 1] ?? 0;
 
   const displayValues = useMemo(
-    () => (values.length === 0 ? [0] : downsample(values, MINI_CHART_MAX_POINTS)),
+    () => (values.length === 0 ? [] : downsample(values, MINI_CHART_MAX_POINTS)),
     [values]
   );
 
@@ -111,13 +111,21 @@ function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
             Latest
           </p>
           <p className="mt-0.5 text-lg font-bold text-[#111827] dark:text-white">
-            {latestValue.toFixed(2)}
+            {values.length === 0 ? "--" : latestValue.toFixed(2)}
           </p>
         </div>
       </header>
 
       <div className="h-56 overflow-hidden rounded-2xl bg-transparent p-1">
-        <Line data={data} options={options} />
+        {values.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-xs text-[#6B7280] dark:text-slate-500">
+              측정이 시작되면 데이터가 표시됩니다
+            </p>
+          </div>
+        ) : (
+          <Line data={data} options={options} />
+        )}
       </div>
     </section>
   );

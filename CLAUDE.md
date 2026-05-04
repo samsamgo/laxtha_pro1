@@ -120,9 +120,9 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-05-03 기준)
+## 현재 상태 (2026-05-04 기준)
 
-최신 커밋: `5da92d9 Add PUD0 bit breakdown labels to diagnostics tile`
+최신 커밋: `09a6631 UI/UX upgrade: chart zoom, Chart.js migration, data retention, CSV export`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -162,6 +162,17 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 파워 스펙트럼 (CH3) Fx2State 추적 + LineChartCard 표시 + CSV/JSON 내보내기
 - [x] PC 프레임 카운터(0-31) + 드롭 프레임 감지 — PC 비연속 시 droppedFrames++ 빨간 표시
 - [x] 전극 상태 (byte[7] bit5=E1/bit4=E2/bit3=REF) 진단 타일 — 녹/적 도트 표시
+- [x] LineChartCard → Chart.js 마이그레이션 — TradingView 워터마크/브랜딩 완전 제거 (ToS 위반 없음)
+- [x] 마우스 휠 스크롤 줌 — EEGChartV2 X축 커서 위치 기준 줌인/아웃
+- [x] 줌 초기화 버튼 — 스크롤 줌 후 amber 버튼 표시, 클릭 시 windowSeconds 기준 라이브 복귀
+- [x] MAX_CHART_POINTS 18000 → 72000 — 60Hz에서 5분→20분, 데이터 너무 빨리 사라지는 문제 해소
+- [x] CSV 자동 저장 — 측정 중 "종료 시 CSV 저장" 체크박스, 종료 시 자동 exportCsv() 호출
+- [x] CSV UTF-8 BOM + 메타데이터 헤더 — Excel 한글 깨짐 없음, 세션 정보 9줄 주석 포함
+- [x] LivePage 세션 상태 배지 — 측정 중(녹색 pulse)/중지됨/대기
+- [x] LivePage 진단 스트립 접기/펼치기 버튼
+- [x] LivePage 보조 신호 차트 섹션 헤더 + 접기/펼치기
+- [x] EEG 차트 아래 조작 힌트 텍스트 (휠/드래그/시간창)
+- [x] 데이터 저장 섹션 개선 — 녹색 좌측 테두리, "차트에서 사라진 데이터도 CSV에 모두 포함" 안내
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 검증** — 진단 스트립: Frames 증가, PPD=1 수신, PC 0-31 순환, 드롭=0, PUD0 bit6/bit2, BPM/RR 정상값, 전극 도트 방향(1=연결?) 확인
@@ -202,4 +213,5 @@ git push origin main
 - Command Center: https://app.notion.com/p/3427b08f46a880ed9babe7d4bd559f84
 - Role Component Hub: https://app.notion.com/p/3517b08f46a8816196d6cc9177f2144a
 - 실행 보드: https://www.notion.so/84c2e09a934b44a2b12093a8e00189de
-- **[최신 핸드오프] 세션2 진단 강화**: https://www.notion.so/3557b08f46a881d6bde5e6b6e0ff69b0
+- [핸드오프] 세션2 진단 강화: https://www.notion.so/3557b08f46a881d6bde5e6b6e0ff69b0
+- **[최신 핸드오프] 세션3 UI/UX 업그레이드**: https://www.notion.so/3567b08f46a8810eaed5e33a71917e08

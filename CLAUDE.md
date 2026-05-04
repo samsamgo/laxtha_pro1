@@ -122,7 +122,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-04 기준)
 
-최신 커밋: `b029093 Lift recorder to context, add SummaryPage export, touch pinch zoom`
+최신 커밋: `0650934 Add signal quality sparkline to signal status card`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -179,7 +179,27 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 데이터 저장 섹션 개선 — 녹색 좌측 테두리, "차트에서 사라진 데이터도 CSV에 모두 포함" 안내
 - [x] OMC-M10/UART 통합 — DeviceMode "uart" 제거, connectOmc() 단일 경로
 - [x] 측정 종료 버튼 — LivePage에 빨간 "측정 종료" 버튼 추가
-- [x] 스크롤바 제거 — overflow-x-hidden + html overflow-y: scroll로 레이아웃 시프트 방지
+- [x] 스크롤바 제거 — `scrollbar-gutter: stable`로 교체 (overflow-y: scroll 제거, Chrome 94+ 지원)
+- [x] DeviceMode "omc" → "serial" 전체 리네임 (types, context, services, pages, components)
+- [x] `connectOmc()` → `connectSerial()` 메서드 리네임 (Fx2HardwareService)
+- [x] 재연결 race condition 수정 — disconnect() FIRST, 그 다음 포트 피커 표시
+- [x] modeLabelMap Layout.tsx에 추가 — raw "SERIAL" 노출 수정
+- [x] SummaryPage 빈 상태 — sampleCount === 0 시 안내 화면 표시
+- [x] BPM 색상 코딩 — <50/>130=빨강, 50-60/100-130=주황, 60-100=정상
+- [x] 신호 품질 프로그레스 바 — 2px 높이, 90%+=녹색, 60-90%=주황, <60%=빨강
+- [x] 다크/라이트 토글 — SVG 해/달 아이콘 추가 (사이드바)
+- [x] SidebarSummary stabilityScore 0 → "—" 표시
+- [x] EEGChartV2 Y축 진폭 줌 — Auto / ±0.5 / ±1 / ±2 / ±5 / ±10 μV 프리셋 버튼
+- [x] EEGChartV2 Y축 μV 레이블 — uPlot axis.label 사용
+- [x] EEGChartV2 일시정지 오버레이 배지 — amber 도트 + "Space 재개" 힌트
+- [x] EEGChartV2 키보드 단축키 — Space=일시정지, L=라이브 (input/button에서는 비활성)
+- [x] LineChartCard 시간 기반 X축 — timestamps 옵션 prop, PPG/sdPPG 차트에 HH:MM:SS 레이블
+- [x] LivePage 파일 크기 추정 — 내보내기 섹션에 CSV/JSON 용량 표시
+- [x] SummaryPage 파일 크기 추정 — 녹화 섹션에 CSV/JSON 용량 표시
+- [x] SummaryPage RR 간격 패널 — 평균/최소/최대 RR + 샘플 수 (실기기 데이터 있을 때만 표시)
+- [x] SummaryPage 세션 시작 시간 / 녹화 시간 — 세션 정보 섹션에 추가
+- [x] LivePage BPM 미니 스파크라인 — 최근 30포인트 SVG, 심박 상태 카드 내부
+- [x] LivePage 신호 품질 미니 스파크라인 — 신호 상태 카드 내부 (signalQualityHistory)
 - [x] LineChartCard 빈 상태 — 측정 전 "--" + placeholder 텍스트 표시
 - [x] HomePage 2열 그리드 (max-w-xl), 헤더 간소화, 모바일 풀-너비 버튼
 - [x] SummaryPage 세션 항목 구분선, 카드 테두리, 레이블 타이포그래피

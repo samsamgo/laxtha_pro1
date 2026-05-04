@@ -1,138 +1,103 @@
-import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from "lightweight-charts";
-import { memo, useEffect, useMemo, useRef } from "react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  type ChartOptions,
+} from "chart.js";
+import { memo, useMemo } from "react";
+import { Line } from "react-chartjs-2";
 import { useFx2Theme } from "../context/ThemeContext";
-import type { DeviceMode } from "../types/fx2";
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler);
 
 interface LineChartCardProps {
   title: string;
   values: number[];
   color: string;
   subtitle: string;
-  mode?: DeviceMode;
 }
 
-const MINI_CHART_MAX_POINTS = 1200;
+const MINI_CHART_MAX_POINTS = 300;
 
-const downsample = (values: number[], maxPoints: number) => {
-  if (values.length <= maxPoints) {
-    return values;
-  }
-
+const downsample = (values: number[], maxPoints: number): number[] => {
+  if (values.length <= maxPoints) return values;
   const step = Math.ceil(values.length / maxPoints);
-  const sampled: number[] = [];
-
-  for (let index = 0; index < values.length; index += step) {
-    sampled.push(values[index]);
-  }
-
-  const lastValue = values[values.length - 1];
-
-  if (sampled[sampled.length - 1] !== lastValue) {
-    sampled.push(lastValue);
-  }
-
-  return sampled;
+  const result: number[] = [];
+  for (let i = 0; i < values.length; i += step) result.push(values[i]);
+  const last = values[values.length - 1];
+  if (result[result.length - 1] !== last) result.push(last);
+  return result;
 };
 
-function LineChartCard({ title, values, color, subtitle, mode }: LineChartCardProps) {
-  const { darkMode } = useFx2Theme();
-  const isUart = mode === "uart";
-  const latestValue = values[values.length - 1] ?? 0;
-  const visibleValues = useMemo(() => {
-    if (values.length === 0) {
-      return [0];
-    }
+const hexToRgba = (hex: string, alpha: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+};
 
-    return downsample(values, MINI_CHART_MAX_POINTS);
-  }, [values]);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const seriesRef = useRef<any>(null);
+function LineChartCard({ title, values, color, subtitle }: LineChartCardProps) {
+  const { darkMode } = useFx2Theme();
+  const latestValue = values[values.length - 1] ?? 0;
+
+  const displayValues = useMemo(
+    () => (values.length === 0 ? [0] : downsample(values, MINI_CHART_MAX_POINTS)),
+    [values]
+  );
 
   const gridColor = darkMode ? "#334155" : "#F1F5F9";
   const textColor = darkMode ? "#94A3B8" : "#6B7280";
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  const data = useMemo(
+    () => ({
+      labels: displayValues.map((_, i) => i),
+      datasets: [
+        {
+          data: displayValues,
+          borderColor: color,
+          backgroundColor: hexToRgba(color, 0.08),
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.3,
+        },
+      ],
+    }),
+    [displayValues, color]
+  );
 
-    chartRef.current?.remove();
-
-    const chart = createChart(container, {
-      width: container.clientWidth,
-      height: container.clientHeight,
-      layout: {
-        background: { color: "transparent" },
-        textColor,
+  const options = useMemo<ChartOptions<"line">>(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
       },
-      grid: {
-        vertLines: { color: gridColor },
-        horzLines: { color: gridColor },
+      scales: {
+        x: {
+          display: false,
+          grid: { color: gridColor },
+        },
+        y: {
+          display: true,
+          position: "right",
+          grid: { color: gridColor },
+          ticks: {
+            color: textColor,
+            maxTicksLimit: 3,
+            font: { size: 10 },
+          },
+          border: { display: false },
+        },
       },
-      rightPriceScale: {
-        borderVisible: false,
-        scaleMargins: { top: 0.1, bottom: 0.1 },
-        ...(isUart ? { autoScale: false } : {}),
-      },
-      timeScale: {
-        borderVisible: false,
-        visible: false,
-      },
-      handleScale: false,
-      handleScroll: false,
-    });
-
-    const series = chart.addSeries(LineSeries, {
-      color,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    });
-
-    if (isUart) {
-      chart.priceScale("right").applyOptions({ autoScale: false });
-    }
-
-    chartRef.current = chart;
-    seriesRef.current = series;
-
-    const observer = new ResizeObserver(() => {
-      chart.applyOptions({
-        width: container.clientWidth,
-        height: container.clientHeight,
-      });
-    });
-    observer.observe(container);
-
-    return () => {
-      observer.disconnect();
-      chart.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-    };
-  }, [darkMode, color, isUart, gridColor, textColor]);
-
-  useEffect(() => {
-    const series = seriesRef.current;
-    if (!series) return;
-
-    const data = visibleValues.map((value, i) => ({
-      time: (i + 1) as UTCTimestamp,
-      value,
-    }));
-
-    series.setData(data);
-
-    if (isUart) {
-      chartRef.current?.priceScale("right").applyOptions({
-        autoScale: false,
-      });
-    }
-
-    chartRef.current?.timeScale().fitContent();
-  }, [visibleValues, isUart]);
+    }),
+    [gridColor, textColor]
+  );
 
   return (
     <section className="fx2-card fx2-outline">
@@ -152,7 +117,7 @@ function LineChartCard({ title, values, color, subtitle, mode }: LineChartCardPr
       </header>
 
       <div className="h-56 rounded-2xl bg-transparent p-1">
-        <div ref={containerRef} className="h-full w-full" />
+        <Line data={data} options={options} />
       </div>
     </section>
   );

@@ -278,6 +278,7 @@ function EEGChartV2({
   const [showLiveButton, setShowLiveButton] = useState(false);
   const [showMoreWindows, setShowMoreWindows] = useState(false);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [showZoomReset, setShowZoomReset] = useState(false);
   const moreDropdownRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -350,6 +351,7 @@ function EEGChartV2({
       setVisibleRange(chart, min, latestSecond);
       atLiveEdgeRef.current = true;
       setShowLiveButton(false);
+      setShowZoomReset(false);
     },
     [setVisibleRange]
   );
@@ -361,6 +363,43 @@ function EEGChartV2({
         mediaRecorderRef.current.stop();
       }
     };
+  }, []);
+
+  // Wheel scroll zoom: pinch/scroll to zoom the x axis around the cursor
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const chart = chartRef.current;
+      if (!chart) return;
+
+      const xMin = chart.scales.x.min;
+      const xMax = chart.scales.x.max;
+      if (xMin === undefined || xMax === undefined) return;
+
+      const zoomFactor = e.deltaY > 0 ? 1.25 : 0.8;
+      const cursorVal = chart.posToVal(e.offsetX, "x");
+      const newMin = cursorVal - (cursorVal - xMin) * zoomFactor;
+      const newMax = cursorVal + (xMax - cursorVal) * zoomFactor;
+
+      isProgrammaticScaleRef.current = true;
+      chart.setScale("x", { min: newMin, max: newMax });
+      isProgrammaticScaleRef.current = false;
+      visibleRangeRef.current = { min: newMin, max: newMax };
+
+      const latestSecond = latestLiveSecondRef.current;
+      if (latestSecond !== null) {
+        const isAtEdge = newMax >= latestSecond - 0.25;
+        atLiveEdgeRef.current = isAtEdge;
+        setShowLiveButton(!isAtEdge);
+      }
+      setShowZoomReset(true);
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
   }, []);
 
   const toggleVideoRecording = useCallback(() => {
@@ -635,6 +674,17 @@ function EEGChartV2({
               >
                 CH2
               </button>
+
+              {showZoomReset ? (
+                <button
+                  type="button"
+                  onClick={() => snapToLive(true)}
+                  title="줌 초기화 및 라이브로 이동"
+                  className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors duration-200 hover:bg-amber-500 hover:text-white dark:bg-amber-500/15 dark:text-amber-300"
+                >
+                  줌 초기화
+                </button>
+              ) : null}
 
               <button
                 type="button"

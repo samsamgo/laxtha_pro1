@@ -141,11 +141,16 @@ export default function LivePage() {
   const [eventLogExpanded, setEventLogExpanded] = useState(
     typeof window !== "undefined" ? window.innerWidth >= 640 : true
   );
+  const [autoSaveCsv, setAutoSaveCsv] = useState(false);
+  const [secondaryCollapsed, setSecondaryCollapsed] = useState(false);
+  const [diagCollapsed, setDiagCollapsed] = useState(false);
 
   const logContainerRef = useRef<HTMLUListElement | null>(null);
   const logPinnedRef = useRef(true);
   const prevPhaseRef = useRef(sessionPhase);
   const sessionStartTsRef = useRef<number | null>(null);
+  const autoSaveCsvRef = useRef(autoSaveCsv);
+  useEffect(() => { autoSaveCsvRef.current = autoSaveCsv; }, [autoSaveCsv]);
 
   // EEG session recorder (samples stored outside React state)
   const {
@@ -170,8 +175,12 @@ export default function LivePage() {
       startRecording(selectedMode);
     } else if (sessionPhase === "stopped" && prev === "running") {
       stopRecording();
+      if (autoSaveCsvRef.current) {
+        // stopRecording() is synchronous; exportCsv reads the already-captured samples
+        setTimeout(() => exportCsv(), 50);
+      }
     }
-  }, [sessionPhase, selectedMode, startRecording, stopRecording]);
+  }, [sessionPhase, selectedMode, startRecording, stopRecording, exportCsv]);
 
   // Append one sample per state update (each new data point)
   const prevTimestampLengthRef = useRef(state.timestamps.length);
@@ -349,6 +358,20 @@ export default function LivePage() {
             </div>
 
             <div className="flex flex-wrap gap-2 2xl:justify-end">
+              {/* Session phase badge */}
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                isRunning
+                  ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300"
+                  : isStopped
+                  ? "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                  : "bg-[#EAF0F8] text-[#6B7280] dark:bg-slate-800 dark:text-slate-400"
+              }`}>
+                <span className={`inline-block h-2 w-2 rounded-full ${
+                  isRunning ? "animate-pulse bg-green-500" : isStopped ? "bg-slate-400" : "bg-gray-300"
+                }`} />
+                {isRunning ? "측정 중" : isStopped ? "중지됨" : "대기"}
+              </span>
+
               <button
                 type="button"
                 onClick={handleOmcm10Connect}
@@ -382,6 +405,19 @@ export default function LivePage() {
                     {recSummary.sampleCount.toLocaleString()}샘플
                   </span>
                 </div>
+              ) : null}
+
+              {/* Auto-save CSV toggle — visible while running */}
+              {isRunning ? (
+                <label className="flex cursor-pointer items-center gap-2 rounded-full bg-[#EAF0F8] px-3 py-2 text-xs font-semibold text-[#6B7280] dark:bg-slate-800 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={autoSaveCsv}
+                    onChange={(e) => setAutoSaveCsv(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-[#2563EB]"
+                  />
+                  종료 시 CSV 저장
+                </label>
               ) : null}
 
               <button
@@ -422,11 +458,21 @@ export default function LivePage() {
                   Web Serial 프레임 수신, PPD 상태, PUD0/RR/raw 값을 연결 중에 바로 확인합니다.
                 </p>
               </div>
-              <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                마지막 프레임 {lastFrameAtLabel}
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                  마지막 프레임 {lastFrameAtLabel}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setDiagCollapsed((c) => !c)}
+                  className="rounded-full bg-[#EAF0F8] px-3 py-1 text-xs font-semibold text-[#6B7280] transition-colors hover:bg-[#2563EB] hover:text-white dark:bg-slate-700 dark:text-slate-300"
+                >
+                  {diagCollapsed ? "펼치기" : "접기"}
+                </button>
+              </div>
             </div>
 
+            {diagCollapsed ? null : (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-11">
               <div className="fx2-surface rounded-2xl px-3 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
@@ -549,20 +595,24 @@ export default function LivePage() {
                 )}
               </div>
             </div>
+            )}
           </section>
         ) : null}
 
         {/* Export section — shown after session ends if recording exists */}
         {isStopped && recSummary.hasRecording ? (
-          <section className="fx2-card fx2-outline">
+          <section className="fx2-card fx2-outline border-l-4 border-l-green-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="fx2-title">데이터 내보내기</h2>
+                <h2 className="fx2-title">데이터 저장</h2>
                 <p className="mt-1 text-xs text-[#6B7280] dark:text-slate-400">
-                  기록 시간 {formatMs(recSummary.durationMs)} · {recSummary.sampleCount.toLocaleString()}샘플
+                  기록 시간 {formatMs(recSummary.durationMs)} · {recSummary.sampleCount.toLocaleString()}샘플 전체 포함
                   {recSummary.startedAt
                     ? ` · ${new Date(recSummary.startedAt).toLocaleTimeString("ko-KR")} 시작`
                     : null}
+                </p>
+                <p className="mt-0.5 text-xs text-green-600 dark:text-green-400">
+                  차트에서 사라진 데이터도 CSV에 모두 포함됩니다.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -571,14 +621,14 @@ export default function LivePage() {
                   onClick={exportCsv}
                   className="rounded-full bg-green-50 px-4 py-2 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-600 hover:text-white dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-600 dark:hover:text-white"
                 >
-                  CSV 내보내기
+                  CSV 저장
                 </button>
                 <button
                   type="button"
                   onClick={exportJson}
                   className="rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-[#2563EB] dark:hover:text-white"
                 >
-                  JSON 내보내기
+                  JSON 저장
                 </button>
                 <button
                   type="button"
@@ -609,10 +659,31 @@ export default function LivePage() {
             onCh1Toggle={() => setCh1Visible((c) => !c)}
             onCh2Toggle={() => setCh2Visible((c) => !c)}
           />
+          <p className="mt-1 text-center text-[10px] text-[#6B7280] dark:text-slate-500">
+            마우스 휠로 줌 · 드래그로 이동 · 시간창 버튼으로 범위 선택
+          </p>
         </div>
 
         {/* Bottom row */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <section className="fx2-card fx2-outline xl:col-span-2 -mb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="fx2-title text-base">이벤트 &amp; 보조 신호</h2>
+                <p className="text-xs text-[#6B7280] dark:text-slate-400">이벤트 로그와 PPG, RR, 파워스펙트럼 추이</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSecondaryCollapsed((c) => !c)}
+                className="rounded-full bg-[#EAF0F8] px-3 py-1 text-xs font-semibold text-[#6B7280] transition-colors hover:bg-[#2563EB] hover:text-white dark:bg-slate-700 dark:text-slate-300"
+              >
+                {secondaryCollapsed ? "펼치기 ▾" : "접기 ▴"}
+              </button>
+            </div>
+          </section>
+
+          {secondaryCollapsed ? null : (
+          <>
           <section className="fx2-card fx2-outline">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
@@ -720,6 +791,8 @@ export default function LivePage() {
             values={state.powerSpectrum}
             color="#EC4899"
           />
+          </>
+          )}
         </div>
       </div>
 

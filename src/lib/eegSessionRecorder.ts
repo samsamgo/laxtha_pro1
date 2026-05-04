@@ -52,17 +52,41 @@ export class EegSessionRecorder {
   exportCsv(): void {
     if (this.samples.length === 0) return;
 
-    const header = "timestamp,elapsed_ms,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode";
+    const startTs = this.startedAt ?? Date.now();
+    const endTs = this.endedAt ?? Date.now();
+    const durationMs = endTs - startTs;
+
+    const metadata = [
+      `# FX2 EEG Session Export`,
+      `# Device: FX2 / OMC-M10`,
+      `# Mode: ${this.sessionMode}`,
+      `# Started: ${new Date(startTs).toISOString()}`,
+      `# Ended: ${new Date(endTs).toISOString()}`,
+      `# Duration: ${(durationMs / 1000).toFixed(1)}s`,
+      `# Samples: ${this.samples.length}`,
+      `# Note: All recorded samples are included — includes data no longer visible on chart`,
+      `# Exported: ${new Date().toISOString()}`,
+    ].join("\n");
+
+    const header =
+      "timestamp,elapsed_ms,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode";
     const rows = this.samples.map(
       (s) =>
         `${s.timestamp},${s.elapsedMs},${s.ch1.toFixed(4)},${s.ch2.toFixed(4)},${s.bpm},${s.ppg.toFixed(4)},${s.sdppg.toFixed(4)},${s.rrInterval},${s.powerSpectrum.toFixed(2)},${s.wear},${s.signal},${s.mode}`
     );
-    const csv = [header, ...rows].join("\n");
 
-    this.downloadBlob(
-      new Blob([csv], { type: "text/csv;charset=utf-8;" }),
-      this.buildFilename("csv")
-    );
+    // UTF-8 BOM for Excel compatibility
+    const BOM = "﻿";
+    const csv = BOM + metadata + "\n" + header + "\n" + rows.join("\n");
+
+    try {
+      this.downloadBlob(
+        new Blob([csv], { type: "text/csv;charset=utf-8;" }),
+        this.buildFilename("csv")
+      );
+    } catch {
+      alert("CSV 저장에 실패했습니다. 브라우저 다운로드 권한을 확인해 주세요.");
+    }
   }
 
   exportJson(): void {
@@ -83,10 +107,14 @@ export class EegSessionRecorder {
       samples: this.samples,
     };
 
-    this.downloadBlob(
-      new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
-      this.buildFilename("json")
-    );
+    try {
+      this.downloadBlob(
+        new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+        this.buildFilename("json")
+      );
+    } catch {
+      alert("JSON 저장에 실패했습니다. 브라우저 다운로드 권한을 확인해 주세요.");
+    }
   }
 
   private buildFilename(ext: string): string {
@@ -94,7 +122,8 @@ export class EegSessionRecorder {
     const pad = (n: number) => String(n).padStart(2, "0");
     const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const time = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
-    return `FX2_session_${date}_${time}.${ext}`;
+    const suffix = this.samples.length > 100000 ? `_${this.samples.length}samples` : "";
+    return `FX2_session_${date}_${time}${suffix}.${ext}`;
   }
 
   private downloadBlob(blob: Blob, filename: string): void {

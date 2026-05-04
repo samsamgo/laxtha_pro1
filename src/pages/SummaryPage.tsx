@@ -42,6 +42,11 @@ function SummaryMetric({
   );
 }
 
+const formatBytes = (bytes: number): string => {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  return `${Math.ceil(bytes / 1024)}KB`;
+};
+
 const formatMs = (ms: number) => {
   const s = Math.floor(ms / 1000);
   const hh = String(Math.floor(s / 3600)).padStart(2, "0");
@@ -262,6 +267,9 @@ export default function SummaryPage() {
             </p>
             <p className="mt-1.5 text-xs text-[#6B7280] dark:text-slate-400">
               {recorderSummary.sampleCount.toLocaleString()}샘플 · 차트에서 사라진 데이터도 포함됩니다
+            </p>
+            <p className="mt-0.5 text-xs text-[#9CA3AF] dark:text-slate-500">
+              CSV≈{formatBytes(recorderSummary.sampleCount * 100 + 600)} · JSON≈{formatBytes(recorderSummary.sampleCount * 160 + 200)}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button

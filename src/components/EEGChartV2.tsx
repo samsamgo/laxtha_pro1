@@ -208,6 +208,9 @@ const makeOptions = (
       {
         scale: "y",
         side: 1,
+        label: "μV",
+        labelFont: `bold 10px ${["-apple-system", "sans-serif"].join(",")}`,
+        labelSize: 16,
         stroke: colors.text,
         grid: { stroke: colors.grid, width: 1 },
         ticks: { show: false },

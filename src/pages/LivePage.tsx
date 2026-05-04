@@ -660,7 +660,7 @@ export default function LivePage() {
             onCh2Toggle={() => setCh2Visible((c) => !c)}
           />
           <p className="mt-1 text-center text-[10px] text-[#6B7280] dark:text-slate-500">
-            마우스 휠로 줌 · 드래그로 이동 · 시간창 버튼으로 범위 선택
+            마우스 휠 / 두 손가락 핀치로 줌 · 드래그로 이동 · 시간창 버튼으로 범위 선택
           </p>
         </div>
 

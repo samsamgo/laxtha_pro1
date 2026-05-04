@@ -9,7 +9,7 @@ FX2 뇌파(EEG) 장치 출력을 Chrome 전용 실시간 웹 대시보드로 시
 ## 기술 스택
 - **프레임워크**: React 18 + TypeScript 5.6 + Vite
 - **스타일**: Tailwind CSS 3 (`dark:` class 방식 다크모드)
-- **차트**: uPlot (EEGChartV2 메인 EEG 차트) + lightweight-charts (LineChartCard 심박 추이)
+- **차트**: uPlot (EEGChartV2 메인 EEG 차트) + Chart.js/react-chartjs-2 (LineChartCard 보조 차트)
 - **배포**: Netlify (`netlify.toml`, SPA redirect 설정됨)
 - **URL**: https://laxtha.netlify.app
 
@@ -67,9 +67,9 @@ src/
 ```
 Demo:     setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
 OMC-M10:  Bluetooth SPP(COM10/AMP-SPP) → Web Serial → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
-UART:     Web Serial binary → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
 
-Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 18000pt, heartRateHistory = 180pt, logs = 40건
+Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 72000pt (60Hz 20분), heartRateHistory = 180pt, logs = 40건
+EegSessionRecorder: 전체 샘플 무제한 보관 (React state 외부), 세션 종료 후 CSV/JSON 내보내기
 ```
 
 ---
@@ -122,7 +122,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-04 기준)
 
-최신 커밋: `09a6631 UI/UX upgrade: chart zoom, Chart.js migration, data retention, CSV export`
+최신 커밋: `b029093 Lift recorder to context, add SummaryPage export, touch pinch zoom`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -164,15 +164,25 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] 전극 상태 (byte[7] bit5=E1/bit4=E2/bit3=REF) 진단 타일 — 녹/적 도트 표시
 - [x] LineChartCard → Chart.js 마이그레이션 — TradingView 워터마크/브랜딩 완전 제거 (ToS 위반 없음)
 - [x] 마우스 휠 스크롤 줌 — EEGChartV2 X축 커서 위치 기준 줌인/아웃
+- [x] 터치 핀치 줌 — EEGChartV2 두 손가락 핀치 제스처로 모바일에서도 줌인/아웃
 - [x] 줌 초기화 버튼 — 스크롤 줌 후 amber 버튼 표시, 클릭 시 windowSeconds 기준 라이브 복귀
+- [x] 차트 줌 후 라이브 멈춤 버그 수정 — zoomedWindowRef 패턴으로 live-follow 유지
 - [x] MAX_CHART_POINTS 18000 → 72000 — 60Hz에서 5분→20분, 데이터 너무 빨리 사라지는 문제 해소
 - [x] CSV 자동 저장 — 측정 중 "종료 시 CSV 저장" 체크박스, 종료 시 자동 exportCsv() 호출
 - [x] CSV UTF-8 BOM + 메타데이터 헤더 — Excel 한글 깨짐 없음, 세션 정보 9줄 주석 포함
+- [x] EegSessionRecorder → Fx2RealtimeContext 이관 — 페이지 이동 후에도 데이터 유지
+- [x] SummaryPage 데이터 저장 섹션 — 요약 페이지에서 CSV/JSON 다운로드 가능
 - [x] LivePage 세션 상태 배지 — 측정 중(녹색 pulse)/중지됨/대기
 - [x] LivePage 진단 스트립 접기/펼치기 버튼
 - [x] LivePage 보조 신호 차트 섹션 헤더 + 접기/펼치기
-- [x] EEG 차트 아래 조작 힌트 텍스트 (휠/드래그/시간창)
+- [x] EEG 차트 아래 조작 힌트 텍스트 (휠/핀치/드래그/시간창)
 - [x] 데이터 저장 섹션 개선 — 녹색 좌측 테두리, "차트에서 사라진 데이터도 CSV에 모두 포함" 안내
+- [x] OMC-M10/UART 통합 — DeviceMode "uart" 제거, connectOmc() 단일 경로
+- [x] 측정 종료 버튼 — LivePage에 빨간 "측정 종료" 버튼 추가
+- [x] 스크롤바 제거 — overflow-x-hidden + html overflow-y: scroll로 레이아웃 시프트 방지
+- [x] LineChartCard 빈 상태 — 측정 전 "--" + placeholder 텍스트 표시
+- [x] HomePage 2열 그리드 (max-w-xl), 헤더 간소화, 모바일 풀-너비 버튼
+- [x] SummaryPage 세션 항목 구분선, 카드 테두리, 레이블 타이포그래피
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 검증** — 진단 스트립: Frames 증가, PPD=1 수신, PC 0-31 순환, 드롭=0, PUD0 bit6/bit2, BPM/RR 정상값, 전극 도트 방향(1=연결?) 확인

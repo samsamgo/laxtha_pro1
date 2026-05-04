@@ -28,9 +28,9 @@ const modeCards: Array<{
     badge: "로컬 시뮬레이션",
   },
   {
-    key: "omc",
-    title: "OMC-M10 연결",
-    body: "Bluetooth SPP 또는 USB-UART 장치를 Chrome Web Serial로 연결합니다. Chrome 또는 Edge 브라우저 필요.",
+    key: "serial",
+    title: "Web Serial 장치 연결",
+    body: "Bluetooth SPP(COM 포트) 또는 USB-UART 장치를 Chrome Web Serial로 연결합니다. Chrome / Edge 필요.",
     badge: "Web Serial",
   },
 ];
@@ -46,7 +46,7 @@ const hardwareLabelMap = {
 
 const modeLabelMap: Record<string, string> = {
   demo: "DEMO",
-  omc: "OMC-M10",
+  serial: "Web Serial",
 };
 
 export default function HomePage() {
@@ -75,7 +75,7 @@ export default function HomePage() {
     (hardwareStatus === "requesting" || hardwareStatus === "connecting");
 
   const unsupportedMessage = useMemo(() => {
-    if (selectedMode === "omc" && !serialSupported) {
+    if (selectedMode === "serial" && !serialSupported) {
       return "이 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge에서 다시 시도해 주세요.";
     }
     return null;
@@ -103,7 +103,7 @@ export default function HomePage() {
           뇌파(EEG) 실시간 대시보드
         </h2>
         <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">
-          FX2 / OMC-M10 장치를 Web Serial로 연결하거나 Demo 모드로 체험하세요.
+          Web Serial 장치를 연결하거나 Demo 모드로 체험하세요.
         </p>
 
         <div className="mt-8">
@@ -114,7 +114,7 @@ export default function HomePage() {
             {modeCards.map((item) => {
               const active = item.key === selectedMode;
               const unsupported =
-                item.key === "omc" && !serialSupported;
+                item.key === "serial" && !serialSupported;
 
               return (
                 <button

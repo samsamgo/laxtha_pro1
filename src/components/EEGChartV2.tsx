@@ -7,7 +7,7 @@ export interface EEGChartV2Props {
   ch1: number[];
   ch2: number[];
   timestamps: number[]; // Unix ms
-  mode: "demo" | "omc" | "uart";
+  mode: "demo" | "serial";
   windowSeconds: ExtWindowSeconds;
   paused: boolean;
   ch1Visible: boolean;
@@ -285,7 +285,7 @@ function EEGChartV2({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  const isUart = mode === "uart";
+  const isUart = mode === "serial";
   const latestCh1 = ch1[ch1.length - 1];
   const latestCh2 = ch2[ch2.length - 1];
   const isExtendedWindow = windowSeconds === 120 || windowSeconds === 300;

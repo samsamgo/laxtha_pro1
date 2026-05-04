@@ -241,7 +241,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   };
 
   const connectHardware = async () => {
-    const connected = await hardwareRef.current.connectOmc();
+    const connected = await hardwareRef.current.connectSerial();
 
     if (!connected) {
       setSessionPhase("idle");

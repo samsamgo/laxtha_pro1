@@ -58,7 +58,7 @@ export class EegSessionRecorder {
 
     const metadata = [
       `# FX2 EEG Session Export`,
-      `# Device: FX2 / OMC-M10`,
+      `# Device: FX2 Web Serial`,
       `# Mode: ${this.sessionMode}`,
       `# Started: ${new Date(startTs).toISOString()}`,
       `# Ended: ${new Date(endTs).toISOString()}`,

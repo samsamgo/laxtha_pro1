@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 
 const modeLabelMap: Record<string, string> = {
-  omc: "OMC-M10",
+  serial: "Web Serial",
   demo: "DEMO",
 };
 

@@ -32,6 +32,11 @@ const sessionPhaseLabelMap = {
   stopped: "종료됨",
 } as const;
 
+const modeLabelMap: Record<string, string> = {
+  serial: "Web Serial",
+  demo: "DEMO",
+};
+
 const formatDuration = (seconds: number) => {
   const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
   const mm = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
@@ -157,7 +162,7 @@ export default function Layout({ children, title }: LayoutProps) {
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span>장치 모드</span>
                 <span className="font-semibold text-slate-200">
-                  {selectedMode.toUpperCase()}
+                  {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-400">
@@ -256,7 +261,7 @@ export default function Layout({ children, title }: LayoutProps) {
             }`}
           >
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#6B7280] dark:text-slate-400">
-              {selectedMode.toUpperCase()} · {sessionPhaseLabelMap[sessionPhase]}
+              {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()} · {sessionPhaseLabelMap[sessionPhase]}
             </p>
             <p
               className={`mt-0.5 text-sm font-medium ${
@@ -286,7 +291,7 @@ export default function Layout({ children, title }: LayoutProps) {
               <div>
                 <p>장치 모드</p>
                 <p className="mt-1 font-semibold text-[#111827] dark:text-white">
-                  {selectedMode.toUpperCase()}
+                  {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
                 </p>
               </div>
               <div>

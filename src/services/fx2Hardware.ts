@@ -11,7 +11,7 @@ export type Fx2HardwareStatus =
 
 export type Fx2HardwareEvent =
   | { type: "status"; status: Fx2HardwareStatus; detail?: string }
-  | { type: "packet"; mode: "omc"; frame: Fx2BinaryFrame };
+  | { type: "packet"; mode: "serial"; frame: Fx2BinaryFrame };
 
 interface UartConnectOptions {
   baudRate?: number;
@@ -75,9 +75,7 @@ export class Fx2HardwareService {
     return this.status;
   }
 
-  // OMC-M10 is Bluetooth Classic SPP — connects via Web Serial, not Web Bluetooth.
-  async connectOmc() {
-    this.setStatus("requesting", "Select the OMC-M10 Bluetooth serial port.");
+  async connectSerial() {
     return this.connectUart({ forcePrompt: true });
   }
 
@@ -91,18 +89,24 @@ export class Fx2HardwareService {
       const baudRate = options.baudRate ?? DEFAULT_UART_BAUD_RATE;
       this.lastUartBaudRate = baudRate;
 
-      const port = await this.resolveUartPort(Boolean(options.forcePrompt));
+      // Disconnect first to ensure clean state before prompting for a port
       await this.disconnect();
+      this.setStatus("requesting", "Web Serial 장치를 선택해 주세요.");
+      const port = await this.resolveUartPort(Boolean(options.forcePrompt));
 
       this.uartReconnectEnabled = true;
       await this.openSerialPort(port, baudRate);
 
-      this.setStatus("connected", `UART ${baudRate}bps streaming`);
+      const info = port.getInfo();
+      const portLabel = info.usbVendorId
+        ? `USB VID:${info.usbVendorId.toString(16).toUpperCase()}`
+        : "SPP/COM";
+      this.setStatus("connected", `Web Serial (${portLabel}) ${baudRate}bps`);
       return true;
     } catch (error) {
       this.uartReconnectEnabled = false;
       const detail =
-        error instanceof Error ? error.message : "UART connection failed.";
+        error instanceof Error ? error.message : "Web Serial 연결에 실패했습니다.";
       this.setStatus("error", detail);
       return false;
     }
@@ -179,7 +183,7 @@ export class Fx2HardwareService {
         continue;
       }
       const frameBytes = this.binaryBuffer.splice(0, 20);
-      this.emit({ type: "packet", mode: "omc", frame: this.parseBinaryFrame(frameBytes) });
+      this.emit({ type: "packet", mode: "serial", frame: this.parseBinaryFrame(frameBytes) });
     }
   }
 
@@ -226,7 +230,7 @@ export class Fx2HardwareService {
     }
 
     if (forcePrompt) {
-      this.setStatus("requesting", "Select OMC-M10, COM10, or Bluetooth serial port.");
+      this.setStatus("requesting", "Web Serial 장치를 선택해 주세요.");
       return navigator.serial!.requestPort({ filters: this.uartFilters });
     }
 
@@ -236,12 +240,12 @@ export class Fx2HardwareService {
       return grantedPorts[0];
     }
 
-    this.setStatus("requesting", "Select OMC-M10, COM10, or Bluetooth serial port.");
+    this.setStatus("requesting", "Web Serial 장치를 선택해 주세요.");
     return navigator.serial!.requestPort({ filters: this.uartFilters });
   }
 
   private async openSerialPort(port: SerialPort, baudRate: number) {
-    this.setStatus("connecting", `UART ${baudRate}bps connecting`);
+    this.setStatus("connecting", `Web Serial ${baudRate}bps 연결 중`);
     await port.open({ baudRate, dataBits: 8, stopBits: 1, parity: "none" });
     this.serialPort = port;
     this.lastSerialPort = port;
@@ -264,7 +268,7 @@ export class Fx2HardwareService {
 
     this.serialAbort = true;
     this.serialPort = null;
-    this.setStatus("idle", "UART disconnected.");
+    this.setStatus("idle", "Web Serial 연결이 끊어졌습니다.");
   };
 
   private async tryReconnectUart() {
@@ -277,7 +281,7 @@ export class Fx2HardwareService {
       }
 
       await this.openSerialPort(port, this.lastUartBaudRate);
-      this.setStatus("connected", `UART ${this.lastUartBaudRate}bps streaming`);
+      this.setStatus("connected", `Web Serial ${this.lastUartBaudRate}bps`);
     } catch {
       // Ignore transient failures and wait for the next connect event.
     }

@@ -34,7 +34,7 @@ const formatDiagnosticNumber = (value: number | null, suffix = "") =>
   value === null ? "—" : `${value}${suffix}`;
 
 const modeLabelMap: Record<string, string> = {
-  omc: "OMC-M10",
+  serial: "Web Serial",
   demo: "DEMO",
 };
 
@@ -284,7 +284,7 @@ export default function LivePage() {
       return;
     }
 
-    await startSession("omc");
+    await startSession("serial");
   };
 
   return (
@@ -375,10 +375,10 @@ export default function LivePage() {
                 }`}
               >
                 {hardwareConnected
-                  ? "OMC-M10 연결 해제"
+                  ? "장치 연결 해제"
                   : hardwareBusy
-                  ? "OMC-M10 연결 중..."
-                  : "OMC-M10 연결"}
+                  ? "장치 연결 중..."
+                  : "장치 연결"}
               </button>
 
               {isRunning ? (
@@ -445,7 +445,7 @@ export default function LivePage() {
 
         {showConnectionWarning ? (
           <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-            ⚠️ 하드웨어 연결이 끊어졌습니다. OMC-M10 연결 버튼으로 재연결하거나 세션을 종료하세요.
+            ⚠️ 하드웨어 연결이 끊어졌습니다. 장치 연결 버튼으로 재연결하거나 세션을 종료하세요.
           </div>
         ) : null}
 
@@ -453,7 +453,7 @@ export default function LivePage() {
           <section className="fx2-card fx2-outline">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="fx2-title">OMC-M10 실기기 진단</h2>
+                <h2 className="fx2-title">Web Serial 진단</h2>
                 <p className="text-xs leading-5 text-[#6B7280] dark:text-slate-400">
                   Web Serial 프레임 수신, PPD 상태, PUD0/RR/raw 값을 연결 중에 바로 확인합니다.
                 </p>

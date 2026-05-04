@@ -866,6 +866,12 @@ function EEGChartV2({
       </div>
 
       <div className="relative h-[280px] min-h-[280px] w-full overflow-hidden rounded-2xl sm:h-[340px] md:h-[400px] lg:h-[480px]">
+        {paused ? (
+          <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-slate-900/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+            일시정지 · Space 재개
+          </div>
+        ) : null}
         {showLiveButton ? (
           <button
             type="button"

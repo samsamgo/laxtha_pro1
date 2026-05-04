@@ -68,6 +68,32 @@ const signalLabel = {
   poor: "부족",
 } as const;
 
+function MiniSparkline({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return null;
+  const n = Math.min(values.length, 30);
+  const recent = values.slice(-n);
+  const min = Math.min(...recent);
+  const max = Math.max(...recent);
+  const range = max - min || 1;
+  const W = 56;
+  const H = 16;
+  const points = recent
+    .map((v, i) => `${(i / (n - 1)) * W},${H - ((v - min) / range) * H}`)
+    .join(" ");
+  return (
+    <svg width={W} height={H} className="mt-1.5 overflow-visible opacity-60">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function HeartIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
@@ -321,7 +347,9 @@ export default function LivePage() {
                 value={`${state.heartRate}`}
                 iconClassName="bg-red-50 text-[#EF4444] dark:bg-red-500/10 dark:text-red-300"
                 valueClassName={getBpmValueClassName(state.heartRate)}
-              />
+              >
+                <MiniSparkline values={state.heartRateHistory} color="#EF4444" />
+              </CompactStatusItem>
               <CompactStatusItem
                 icon={<WearIcon />}
                 label="착용"

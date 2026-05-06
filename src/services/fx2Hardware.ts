@@ -89,8 +89,11 @@ export class Fx2HardwareService {
       const baudRate = options.baudRate ?? DEFAULT_UART_BAUD_RATE;
       this.lastUartBaudRate = baudRate;
 
-      // Disconnect first to ensure clean state before prompting for a port
+      // Disconnect first to ensure clean state.
+      // 300ms pause lets Windows/Chrome fully release Bluetooth COM ports
+      // before showing the port picker — avoids "장치 오류" on quick reconnect.
       await this.disconnect();
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
       this.setStatus("requesting", "Web Serial 장치를 선택해 주세요.");
       const port = await this.resolveUartPort(Boolean(options.forcePrompt));
 

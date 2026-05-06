@@ -356,22 +356,13 @@ export default function LivePage() {
                   </button>
                 </>
               ) : isRunning ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={stopSession}
-                    className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
-                  >
-                    측정 종료
-                  </button>
-                  <button
-                    type="button"
-                    onClick={disconnectDevice}
-                    className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                  >
-                    연결 해제
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={stopSession}
+                  className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
+                >
+                  측정 종료
+                </button>
               ) : null}
 
               {/* REC indicator */}

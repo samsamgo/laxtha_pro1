@@ -19,7 +19,7 @@ FX2 뇌파(EEG) 장치 출력을 Chrome 전용 실시간 웹 대시보드로 시
 
 ```
 src/
-├── App.tsx                     # 라우터 (/, /live, /summary)
+├── App.tsx                     # 라우터 (/live, /summary) — * → /live redirect
 ├── main.tsx                    # React 진입점
 ├── index.css                   # Tailwind + .fx2-card / .fx2-title 등 전역 컴포넌트 클래스
 │
@@ -52,8 +52,7 @@ src/
 │   └── LineChartCard.tsx       # 보조 차트 (uPlot, 4Hz throttle, ResizeObserver, no header)
 │
 └── pages/
-    ├── HomePage.tsx            # 모드 선택 + 측정 시작 버튼
-    ├── LivePage.tsx            # 실시간 대시보드 (메인 화면)
+    ├── LivePage.tsx            # 실시간 대시보드 — 모드 선택 + 측정 시작/종료 CTA 포함
     └── SummaryPage.tsx         # 세션 요약
 ```
 
@@ -117,9 +116,9 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-05-04 기준)
+## 현재 상태 (2026-05-06 기준)
 
-최신 커밋: `70127da Perf: migrate secondary charts to uPlot, remove dead code & Chart.js`
+최신 커밋: `6b50196 UX: 15-item feedback pass — reconnect, chart labels, mode toggle, single CTA`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -211,12 +210,24 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] pushManualUpdate / applyPreset / DemoPreset / buildMessageFromState context에서 제거
 - [x] LivePage 진단 스트립(11타일), 데모 패널, auto-save 체크박스, SidebarSummary 제거
 - [x] LineChartCard: title/subtitle/latest-value 배지 제거 — 차트 캔버스만 표시
+- [x] **[세션8 — 15개 UX 피드백]** stopSession() 포트 비해제 + sessionActiveRef 게이팅 (재연결 부드러움)
+- [x] startSession() — getStatus()==="connected" 시 포트 피커 생략
+- [x] HomePage.tsx 삭제 — /live로 통합, * → /live 리디렉트
+- [x] LivePage 인라인 Demo/Serial 토글 (실행 중 아닐 때만 표시)
+- [x] LivePage 단일 CTA — "측정 시작" / "측정 종료" 버튼 (연결 단계 분리 없앰)
+- [x] LineChartCard label prop — 차트 아래 작은 대문자 텍스트 레이블
+- [x] LineChartCard 슬라이딩 윈도우 — 최근 200pt만 유지, 오래된 데이터 자동 제거
+- [x] EEGChartV2 Y축 프리셋 버튼 제거 — 항상 auto scale
+- [x] EEGChartV2 mode prop 제거, UART 0-255 배지 제거
+- [x] 보조 차트 기본 숨김 — 토글 버튼 한 번으로 표시/숨기기
+- [x] Layout 헤더 다크모드 버튼 lg:hidden (사이드바가 데스크톱 처리)
+- [x] Layout 토스트 — 에러/미지원만 표시 (성공/정보 제거)
+- [x] Layout 홈 nav 항목 제거
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 연결 검증** — PPD=1 수신, BPM/RR 정상값, 차트 시간창 timestamp 확인
 - [ ] **[하드웨어] PPG/sdPPG/RR/파워스펙트럼 신호 검증** — CH4/CH5/CH6/CH3 실기기에서 값 변화 여부
 - [ ] **[하드웨어] 장시간 성능** — 5분 이상 연결 시 메모리/CPU 안정성 확인
-- [ ] **[UX] 보조 차트 레이블** — 차트 아래 작은 텍스트 레이블 추가 여부 검토 (현재 레이블 없음)
 
 ---
 

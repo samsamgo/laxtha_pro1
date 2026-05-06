@@ -75,14 +75,7 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
     .join(" ");
   return (
     <svg width={W} height={H} className="mt-1.5 overflow-visible opacity-60">
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -132,14 +125,7 @@ interface CompactStatusItemProps {
   children?: ReactNode;
 }
 
-function CompactStatusItem({
-  icon,
-  label,
-  value,
-  iconClassName,
-  valueClassName = "text-[#111827] dark:text-white",
-  children,
-}: CompactStatusItemProps) {
+function CompactStatusItem({ icon, label, value, iconClassName, valueClassName = "text-[#111827] dark:text-white", children }: CompactStatusItemProps) {
   return (
     <div className="fx2-card fx2-outline flex items-center gap-3 px-4 py-3">
       <span className={`inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${iconClassName}`}>
@@ -160,11 +146,10 @@ export default function LivePage() {
     selectedMode,
     sessionPhase,
     hardwareStatus,
-    hardwareDetail,
     recorderSummary,
+    setSelectedMode,
     startSession,
     stopSession,
-    disconnectHardware,
     appendSample,
     exportCsv,
     exportJson,
@@ -176,12 +161,14 @@ export default function LivePage() {
   const [paused, setPaused] = useState(false);
   const [ch1Visible, setCh1Visible] = useState(true);
   const [ch2Visible, setCh2Visible] = useState(true);
+  const [showCharts, setShowCharts] = useState(false);
+
   const logContainerRef = useRef<HTMLUListElement | null>(null);
   const logPinnedRef = useRef(true);
   const prevPhaseRef = useRef(sessionPhase);
   const sessionStartTsRef = useRef<number | null>(null);
 
-  // Throttle secondary chart data to ~4Hz to reduce render pressure at 60Hz hardware rate
+  // Throttle secondary chart data to ~4Hz
   const secondaryRef = useRef(state);
   secondaryRef.current = state;
   const [secondary, setSecondary] = useState(state);
@@ -199,19 +186,15 @@ export default function LivePage() {
     }
   }, [sessionPhase]);
 
-  // Append one sample per state update (each new data point)
   const prevTimestampLengthRef = useRef(state.timestamps.length);
   useEffect(() => {
     if (sessionPhase !== "running") return;
     if (state.timestamps.length === prevTimestampLengthRef.current) return;
     prevTimestampLengthRef.current = state.timestamps.length;
-
     const lastIdx = state.timestamps.length - 1;
     if (lastIdx < 0) return;
-
     const ts = state.timestamps[lastIdx];
     const startTs = sessionStartTsRef.current ?? ts;
-
     appendSample({
       timestamp: new Date(ts).toISOString(),
       elapsedMs: Math.max(0, ts - startTs),
@@ -228,37 +211,14 @@ export default function LivePage() {
     });
   }, [state.timestamps.length, state.heartRate, state.wearStatus, state.signalStatus, sessionPhase, appendSample]);
 
-  const visibleLogs = useMemo(
-    () => state.logs.slice().reverse().slice(0, 10),
-    [state.logs]
-  );
+  const visibleLogs = useMemo(() => state.logs.slice().reverse().slice(0, 10), [state.logs]);
 
-  // Pass the full retained buffer to EEGChartV2. It applies timestamp-based
-  // windowing and downsampling internally, so 30s/60s are real time windows.
   const chartSeries = useMemo(() => {
-    const pointCount = Math.min(
-      state.ch1.length,
-      state.ch2.length,
-      state.timestamps.length
-    );
-
-    if (
-      pointCount === state.ch1.length &&
-      pointCount === state.ch2.length &&
-      pointCount === state.timestamps.length
-    ) {
-      return {
-        ch1: state.ch1,
-        ch2: state.ch2,
-        timestamps: state.timestamps,
-      };
+    const n = Math.min(state.ch1.length, state.ch2.length, state.timestamps.length);
+    if (n === state.ch1.length && n === state.ch2.length && n === state.timestamps.length) {
+      return { ch1: state.ch1, ch2: state.ch2, timestamps: state.timestamps };
     }
-
-    return {
-      ch1: state.ch1.slice(-pointCount),
-      ch2: state.ch2.slice(-pointCount),
-      timestamps: state.timestamps.slice(-pointCount),
-    };
+    return { ch1: state.ch1.slice(-n), ch2: state.ch2.slice(-n), timestamps: state.timestamps.slice(-n) };
   }, [state.ch1, state.ch2, state.timestamps]);
 
   useEffect(() => {
@@ -274,27 +234,13 @@ export default function LivePage() {
 
   const isRunning = sessionPhase === "running";
   const isStopped = sessionPhase === "stopped";
-  const hardwareBusy =
-    hardwareStatus === "requesting" || hardwareStatus === "connecting";
-  const hardwareConnected = hardwareStatus === "connected";
-  const showConnectionWarning =
-    selectedMode !== "demo" &&
-    sessionPhase === "running" &&
-    !hardwareConnected &&
-    !hardwareBusy;
-  const handleOmcm10Connect = async () => {
-    if (hardwareConnected) {
-      disconnectHardware();
-      return;
-    }
-
-    await startSession("serial");
-  };
+  const hardwareBusy = hardwareStatus === "requesting" || hardwareStatus === "connecting";
+  const serialSupported = typeof navigator !== "undefined" && "serial" in navigator;
 
   return (
     <>
       <div className="flex flex-col gap-5">
-        {/* Status bar */}
+        {/* Status cards */}
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div className="grid grid-cols-2 gap-3 2xl:flex 2xl:flex-1 2xl:flex-nowrap">
@@ -362,8 +308,8 @@ export default function LivePage() {
               />
             </div>
 
-            <div className="flex flex-wrap gap-2 2xl:justify-end">
-              {/* Session phase badge */}
+            <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
+              {/* Status badge */}
               <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
                 isRunning
                   ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300"
@@ -377,25 +323,39 @@ export default function LivePage() {
                 {isRunning ? "측정 중" : isStopped ? "중지됨" : "대기"}
               </span>
 
-              <button
-                type="button"
-                onClick={handleOmcm10Connect}
-                disabled={hardwareBusy}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
-                  hardwareConnected
-                    ? "bg-[#EAF0F8] text-[#6B7280] hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300"
-                    : hardwareBusy
-                    ? "cursor-wait bg-gray-300 text-gray-600 dark:bg-slate-700 dark:text-slate-300"
-                    : "bg-[#2563EB] text-white hover:opacity-90"
-                }`}
-              >
-                {hardwareConnected
-                  ? "장치 연결 해제"
-                  : hardwareBusy
-                  ? "장치 연결 중..."
-                  : "장치 연결"}
-              </button>
+              {/* Mode toggle — only when not measuring */}
+              {!isRunning ? (
+                <div className="flex overflow-hidden rounded-full border border-gray-200 text-xs font-semibold dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode("demo")}
+                    className={`px-3 py-1.5 transition-colors duration-150 ${
+                      selectedMode === "demo"
+                        ? "bg-[#2563EB] text-white"
+                        : "text-[#6B7280] hover:bg-[#EAF0F8] dark:text-slate-400 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    Demo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode("serial")}
+                    disabled={!serialSupported}
+                    className={`px-3 py-1.5 transition-colors duration-150 ${
+                      selectedMode === "serial"
+                        ? "bg-[#2563EB] text-white"
+                        : !serialSupported
+                        ? "cursor-not-allowed text-gray-300 dark:text-slate-600"
+                        : "text-[#6B7280] hover:bg-[#EAF0F8] dark:text-slate-400 dark:hover:bg-slate-800"
+                    }`}
+                    title={!serialSupported ? "Chrome / Edge 필요" : undefined}
+                  >
+                    Serial
+                  </button>
+                </div>
+              ) : null}
 
+              {/* Single start / stop button */}
               {isRunning ? (
                 <button
                   type="button"
@@ -404,48 +364,41 @@ export default function LivePage() {
                 >
                   측정 종료
                 </button>
-              ) : null}
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void startSession()}
+                  disabled={hardwareBusy || (selectedMode === "serial" && !serialSupported)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
+                    hardwareBusy
+                      ? "cursor-wait bg-gray-200 text-gray-500 dark:bg-slate-700 dark:text-slate-400"
+                      : "bg-[#2563EB] text-white hover:opacity-90"
+                  }`}
+                >
+                  {hardwareBusy ? "연결 중..." : "측정 시작"}
+                </button>
+              )}
 
-              {/* REC indicator — visible while running */}
+              {/* REC indicator */}
               {isRunning && recorderSummary.isRecording ? (
                 <div className="flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 dark:bg-red-500/10">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                  <span className="text-xs font-semibold text-red-600 dark:text-red-300">
-                    기록 중
-                  </span>
-                  <span className="text-xs text-red-500 dark:text-red-400">
-                    {formatMs(recorderSummary.durationMs)}
-                  </span>
-                  <span className="text-xs text-red-400 dark:text-red-500">
-                    {recorderSummary.sampleCount.toLocaleString()}샘플
-                  </span>
+                  <span className="text-xs font-semibold text-red-600 dark:text-red-300">기록 중</span>
+                  <span className="text-xs text-red-500 dark:text-red-400">{formatMs(recorderSummary.durationMs)}</span>
+                  <span className="text-xs text-red-400 dark:text-red-500">{recorderSummary.sampleCount.toLocaleString()}샘플</span>
                 </div>
               ) : null}
-
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400">
-            <span>모드: {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}</span>
+            <span>{modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}</span>
             <span>·</span>
             <span>{signalLabel[state.signalStatus]}</span>
-            {hardwareDetail ? (
-              <>
-                <span>·</span>
-                <span>{hardwareDetail}</span>
-              </>
-            ) : null}
           </div>
         </section>
 
-        {showConnectionWarning ? (
-          <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-            ⚠️ 하드웨어 연결이 끊어졌습니다. 장치 연결 버튼으로 재연결하거나 세션을 종료하세요.
-          </div>
-        ) : null}
-
-
-        {/* Export section — shown after session ends if recording exists */}
+        {/* Export section */}
         {isStopped && recorderSummary.hasRecording ? (
           <div className="flex justify-end">
             <Link
@@ -462,10 +415,8 @@ export default function LivePage() {
               <div>
                 <h2 className="fx2-title">데이터 저장</h2>
                 <p className="mt-1 text-xs text-[#6B7280] dark:text-slate-400">
-                  기록 시간 {formatMs(recorderSummary.durationMs)} · {recorderSummary.sampleCount.toLocaleString()}샘플 전체 포함
-                  {recorderSummary.startedAt
-                    ? ` · ${new Date(recorderSummary.startedAt).toLocaleTimeString("ko-KR")} 시작`
-                    : null}
+                  기록 시간 {formatMs(recorderSummary.durationMs)} · {recorderSummary.sampleCount.toLocaleString()}샘플
+                  {recorderSummary.startedAt ? ` · ${new Date(recorderSummary.startedAt).toLocaleTimeString("ko-KR")} 시작` : null}
                   {" "}· CSV≈{formatFileSize(recorderSummary.sampleCount * 100 + 600)} / JSON≈{formatFileSize(recorderSummary.sampleCount * 160 + 200)}
                 </p>
                 <p className="mt-0.5 text-xs text-green-600 dark:text-green-400">
@@ -473,27 +424,9 @@ export default function LivePage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  className="rounded-full bg-green-50 px-4 py-2 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-600 hover:text-white dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-600 dark:hover:text-white"
-                >
-                  CSV 저장
-                </button>
-                <button
-                  type="button"
-                  onClick={exportJson}
-                  className="rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-[#2563EB] dark:hover:text-white"
-                >
-                  JSON 저장
-                </button>
-                <button
-                  type="button"
-                  onClick={clearRecording}
-                  className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                >
-                  기록 초기화
-                </button>
+                <button type="button" onClick={exportCsv} className="rounded-full bg-green-50 px-4 py-2 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-600 hover:text-white dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-600 dark:hover:text-white">CSV 저장</button>
+                <button type="button" onClick={exportJson} className="rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-[#2563EB] dark:hover:text-white">JSON 저장</button>
+                <button type="button" onClick={clearRecording} className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">기록 초기화</button>
               </div>
             </div>
           </section>
@@ -505,7 +438,6 @@ export default function LivePage() {
             ch1={chartSeries.ch1}
             ch2={chartSeries.ch2}
             timestamps={chartSeries.timestamps}
-            mode={selectedMode}
             windowSeconds={windowSeconds}
             paused={paused}
             ch1Visible={ch1Visible}
@@ -517,46 +449,51 @@ export default function LivePage() {
             onCh2Toggle={() => setCh2Visible((c) => !c)}
           />
           <p className="mt-1 text-center text-[10px] text-[#6B7280] dark:text-slate-500">
-            <span className="sm:hidden">
-              <strong>두 손가락 핀치로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택
-            </span>
+            <span className="sm:hidden"><strong>두 손가락 핀치로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택</span>
             <span className="hidden sm:inline">
-              <strong>마우스 휠로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택 · <kbd className="rounded bg-slate-200 px-1 text-[9px] dark:bg-slate-700">Space</kbd> 일시정지 · <kbd className="rounded bg-slate-200 px-1 text-[9px] dark:bg-slate-700">L</kbd> 라이브
+              <strong>마우스 휠로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택 ·{" "}
+              <kbd className="rounded bg-slate-200 px-1 text-[9px] dark:bg-slate-700">Space</kbd> 일시정지 ·{" "}
+              <kbd className="rounded bg-slate-200 px-1 text-[9px] dark:bg-slate-700">L</kbd> 라이브
             </span>
           </p>
         </div>
 
-        {/* Secondary charts */}
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <section className="fx2-card fx2-outline">
-            <h2 className="fx2-title mb-3">이벤트 로그</h2>
-            <ul
-              ref={logContainerRef}
-              onScroll={handleLogScroll}
-              className="max-h-[200px] space-y-2 overflow-y-auto pr-1"
-            >
-              {visibleLogs.length > 0 ? (
-                visibleLogs.map((log, index) => (
-                  <li
-                    key={`${log}-${index}`}
-                    className="fx2-surface rounded-2xl px-3 py-2 text-xs leading-5 text-[#6B7280] dark:text-slate-300"
-                  >
-                    {log}
-                  </li>
-                ))
-              ) : (
-                <li className="fx2-surface rounded-2xl px-3 py-4 text-xs text-[#6B7280] dark:text-slate-400">
-                  아직 기록된 이벤트가 없습니다.
-                </li>
-              )}
-            </ul>
-          </section>
+        {/* Secondary charts — hidden by default */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowCharts((v) => !v)}
+            className="mb-3 rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+          >
+            {showCharts ? "보조 차트 숨기기 ▲" : "보조 차트 보기 ▼"}
+          </button>
 
-          <LineChartCard values={secondary.heartRateHistory} color="#2563EB" />
-          <LineChartCard values={secondary.ppg} timestamps={secondary.timestamps} color="#10B981" />
-          <LineChartCard values={secondary.sdppg} timestamps={secondary.timestamps} color="#F59E0B" />
-          <LineChartCard values={secondary.rrInterval} color="#8B5CF6" />
-          <LineChartCard values={secondary.powerSpectrum} color="#EC4899" />
+          {showCharts ? (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <section className="fx2-card fx2-outline">
+                <h2 className="fx2-title mb-3">이벤트 로그</h2>
+                <ul
+                  ref={logContainerRef}
+                  onScroll={handleLogScroll}
+                  className="max-h-[180px] space-y-2 overflow-y-auto pr-1"
+                >
+                  {visibleLogs.length > 0 ? (
+                    visibleLogs.map((log, index) => (
+                      <li key={`${log}-${index}`} className="fx2-surface rounded-2xl px-3 py-2 text-xs leading-5 text-[#6B7280] dark:text-slate-300">{log}</li>
+                    ))
+                  ) : (
+                    <li className="fx2-surface rounded-2xl px-3 py-4 text-xs text-[#6B7280] dark:text-slate-400">아직 기록된 이벤트가 없습니다.</li>
+                  )}
+                </ul>
+              </section>
+
+              <LineChartCard values={secondary.heartRateHistory} color="#2563EB" label="심박 추이" />
+              <LineChartCard values={secondary.ppg} timestamps={secondary.timestamps} color="#10B981" label="PPG" />
+              <LineChartCard values={secondary.sdppg} timestamps={secondary.timestamps} color="#F59E0B" label="sdPPG" />
+              <LineChartCard values={secondary.rrInterval} color="#8B5CF6" label="RR 간격 (ms)" />
+              <LineChartCard values={secondary.powerSpectrum} color="#EC4899" label="파워 스펙트럼" />
+            </div>
+          ) : null}
         </div>
       </div>
     </>

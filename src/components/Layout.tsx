@@ -12,7 +12,6 @@ interface ToastItem {
 let toastCounter = 0;
 
 const navItems = [
-  { to: "/", label: "홈" },
   { to: "/live", label: "실시간" },
   { to: "/summary", label: "요약" },
 ];
@@ -69,14 +68,10 @@ export default function Layout({ children, title }: LayoutProps) {
     prevStatusRef.current = hardwareStatus;
     if (prev === null || prev === hardwareStatus) return;
 
-    if (hardwareStatus === "connected") {
-      addToast("장치 연결됨", "success");
-    } else if (hardwareStatus === "error") {
+    if (hardwareStatus === "error") {
       addToast("장치 오류 발생", "error");
     } else if (hardwareStatus === "unsupported") {
-      addToast("브라우저가 이 기능을 지원하지 않습니다", "error");
-    } else if (hardwareStatus === "idle" && (prev === "connected" || prev === "connecting")) {
-      addToast("장치 연결 해제됨", "info");
+      addToast("이 브라우저는 Web Serial을 지원하지 않습니다", "error");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hardwareStatus]);
@@ -206,9 +201,19 @@ export default function Layout({ children, title }: LayoutProps) {
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="rounded-xl bg-[#EAF0F8] px-3 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            title={darkMode ? "라이트 모드" : "다크 모드"}
+            className="lg:hidden rounded-xl bg-[#EAF0F8] p-2 text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           >
-            {darkMode ? "라이트" : "다크"}
+            {darkMode ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-yellow-400">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
+              </svg>
+            )}
           </button>
           <button
             type="button"

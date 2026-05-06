@@ -31,7 +31,6 @@ interface Fx2RealtimeContextValue {
   selectedMode: DeviceMode;
   sessionPhase: SessionPhase;
   hardwareStatus: Fx2HardwareStatus;
-  hardwareDetail: string;
   recorderSummary: EegSessionSummary;
   setSelectedMode: (mode: DeviceMode) => void;
   startSession: (modeOverride?: DeviceMode) => Promise<boolean>;
@@ -50,7 +49,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>("idle");
   const [state, setState] = useState<Fx2State>(() => createInitialFx2State("demo"));
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
-  const [hardwareDetail, setHardwareDetail] = useState("");
 
   const hardwareRef = useRef(new Fx2HardwareService());
   const mockTimerRef = useRef<number | null>(null);
@@ -59,6 +57,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const hardwareRafRef = useRef<number | null>(null);
   const recorderRef = useRef(new EegSessionRecorder());
   const recTickRef = useRef<number | null>(null);
+  // Controls whether incoming hardware frames are processed — false while session is stopped
+  const sessionActiveRef = useRef(false);
   const [recorderSummary, setRecorderSummary] = useState<EegSessionSummary>(
     () => recorderRef.current.getSummary()
   );
@@ -73,36 +73,21 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     return hardware.subscribe((event) => {
       if (event.type === "status") {
         setHardwareStatus(event.status);
-        setHardwareDetail(event.detail ?? "");
 
         if (event.status === "error" || event.status === "unsupported") {
           setState((prev) => ({
             ...prev,
-            logs: appendLog(
-              prev.logs,
-              event.detail || "하드웨어 연결 상태를 확인해 주세요."
-            ),
+            logs: appendLog(prev.logs, event.detail || "하드웨어 연결 상태를 확인해 주세요."),
           }));
         }
-
-        const statusDetail = event.detail;
-
-        if (event.status === "connected" && statusDetail) {
-          setState((prev) => ({
-            ...prev,
-            logs: appendLog(prev.logs, statusDetail),
-          }));
-        }
-
         return;
       }
+
+      // Discard frames when session is not active — keeps the serial port open for reconnect
+      if (!sessionActiveRef.current) return;
 
       const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current);
-
-      if (!nextMessage) {
-        // PPD=0 standby frame — silent discard (expected during charging/standby)
-        return;
-      }
+      if (!nextMessage) return; // PPD=0 standby frame
 
       pendingHardwareRef.current.push(nextMessage);
 
@@ -112,7 +97,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
           pendingHardwareRef.current = [];
           hardwareRafRef.current = null;
 
-          if (messages.length === 0) return;
+          if (messages.length === 0 || !sessionActiveRef.current) return;
 
           setState((prev) =>
             messages.reduce((s, msg) => applyIncomingMessage(msg, s), prev)
@@ -127,15 +112,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     return () => {
-      if (mockTimerRef.current !== null) {
-        window.clearInterval(mockTimerRef.current);
-      }
-      if (hardwareRafRef.current !== null) {
-        cancelAnimationFrame(hardwareRafRef.current);
-      }
-      if (recTickRef.current !== null) {
-        window.clearInterval(recTickRef.current);
-      }
+      if (mockTimerRef.current !== null) window.clearInterval(mockTimerRef.current);
+      if (hardwareRafRef.current !== null) cancelAnimationFrame(hardwareRafRef.current);
+      if (recTickRef.current !== null) window.clearInterval(recTickRef.current);
       void hardwareRef.current.disconnect();
     };
   }, []);
@@ -167,11 +146,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
   const connectHardware = async () => {
     const connected = await hardwareRef.current.connectSerial();
-
     if (!connected) {
+      sessionActiveRef.current = false;
       setSessionPhase("idle");
     }
-
     return connected;
   };
 
@@ -179,6 +157,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     const nextMode = modeOverride ?? selectedMode;
 
     stopMockFeed();
+    sessionActiveRef.current = true;
     setSelectedModeState(nextMode);
     resetState(nextMode);
     setSessionPhase("running");
@@ -190,17 +169,24 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     if (nextMode === "demo") {
       await hardwareRef.current.disconnect();
       mockTimerRef.current = window.setInterval(() => {
+        if (!sessionActiveRef.current) return;
         setState((prev) => applyIncomingMessage(createMockMessage(prev), prev));
       }, 1000);
+      return true;
+    }
+
+    // Serial: reuse existing connection without showing port picker again
+    if (hardwareRef.current.getStatus() === "connected") {
       return true;
     }
 
     return connectHardware();
   };
 
+  // Stops data collection but keeps the serial port open for smooth reconnect
   const stopSession = () => {
+    sessionActiveRef.current = false;
     stopMockFeed();
-    void hardwareRef.current.disconnect();
     setSessionPhase("stopped");
     setState((prev) => ({
       ...prev,
@@ -212,7 +198,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     setRecorderSummary(recorderRef.current.getSummary());
   };
 
+  // Hard disconnect — releases the serial port
   const disconnectHardware = () => {
+    sessionActiveRef.current = false;
     stopMockFeed();
     void hardwareRef.current.disconnect();
     setSessionPhase("stopped");
@@ -230,13 +218,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     recorderRef.current.appendSample(sample);
   };
 
-  const exportCsv = () => {
-    recorderRef.current.exportCsv();
-  };
-
-  const exportJson = () => {
-    recorderRef.current.exportJson();
-  };
+  const exportCsv = () => recorderRef.current.exportCsv();
+  const exportJson = () => recorderRef.current.exportJson();
 
   const clearRecording = () => {
     recorderRef.current.clearRecording();
@@ -256,7 +239,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       selectedMode,
       sessionPhase,
       hardwareStatus,
-      hardwareDetail,
       recorderSummary,
       setSelectedMode,
       startSession,
@@ -267,14 +249,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       exportJson,
       clearRecording,
     }),
-    [
-      hardwareDetail,
-      hardwareStatus,
-      recorderSummary,
-      selectedMode,
-      sessionPhase,
-      state,
-    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hardwareStatus, recorderSummary, selectedMode, sessionPhase, state]
   );
 
   return <Fx2RealtimeContext.Provider value={value}>{children}</Fx2RealtimeContext.Provider>;
@@ -282,10 +258,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
 export const useFx2RealtimeSession = () => {
   const context = useContext(Fx2RealtimeContext);
-
-  if (!context) {
-    throw new Error("useFx2RealtimeSession must be used within Fx2RealtimeProvider");
-  }
-
+  if (!context) throw new Error("useFx2RealtimeSession must be used within Fx2RealtimeProvider");
   return context;
 };

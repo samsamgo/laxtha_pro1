@@ -11,7 +11,7 @@ interface LineChartCardProps {
 }
 
 // Keep only the most recent N points — sliding window, no growing history
-const MAX_POINTS = 200;
+const MAX_POINTS = 3600;
 
 function buildData(values: number[], timestamps?: number[]): uPlot.AlignedData {
   if (values.length === 0) {
@@ -32,7 +32,7 @@ function makeOpts(w: number, color: string, darkMode: boolean): uPlot.Options {
   const textColor = darkMode ? "#64748B" : "#9CA3AF";
   return {
     width: w,
-    height: 80,
+    height: 100,
     cursor: { show: false },
     legend: { show: false },
     padding: [4, 4, 4, 0],
@@ -71,7 +71,7 @@ function LineChartCard({ values, timestamps, color, label }: LineChartCardProps)
 
     const ro = new ResizeObserver(([entry]) => {
       const newW = Math.floor(entry.contentRect.width);
-      if (newW > 0) uRef.current?.setSize({ width: newW, height: 80 });
+      if (newW > 0) uRef.current?.setSize({ width: newW, height: 100 });
     });
     ro.observe(el);
 
@@ -88,13 +88,16 @@ function LineChartCard({ values, timestamps, color, label }: LineChartCardProps)
   }, [values, timestamps]);
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900">
-      <div ref={containerRef} className="w-full" />
+    <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
       {label ? (
-        <p className="pb-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF] dark:text-slate-500">
-          {label}
-        </p>
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+          <span className="inline-block h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">
+            {label}
+          </p>
+        </div>
       ) : null}
+      <div ref={containerRef} className="w-full" />
     </div>
   );
 }

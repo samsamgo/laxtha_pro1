@@ -44,11 +44,6 @@ const getSignalBarClassName = (quality: number): string => {
   return "bg-[#EF4444]";
 };
 
-const modeLabelMap: Record<string, string> = {
-  serial: "Web Serial",
-  demo: "DEMO",
-};
-
 const wearLabel = {
   worn: "안정 착용",
   unstable: "불안정",
@@ -143,11 +138,11 @@ function CompactStatusItem({ icon, label, value, iconClassName, valueClassName =
 export default function LivePage() {
   const {
     state,
-    selectedMode,
     sessionPhase,
     hardwareStatus,
     recorderSummary,
-    setSelectedMode,
+    connectDevice,
+    disconnectDevice,
     startSession,
     stopSession,
     appendSample,
@@ -234,8 +229,9 @@ export default function LivePage() {
 
   const isRunning = sessionPhase === "running";
   const isStopped = sessionPhase === "stopped";
-  const hardwareBusy = hardwareStatus === "requesting" || hardwareStatus === "connecting";
-  const serialSupported = typeof navigator !== "undefined" && "serial" in navigator;
+  const isConnected = hardwareStatus === "connected";
+  const isConnecting = hardwareStatus === "requesting" || hardwareStatus === "connecting";
+  const canConnect = hardwareStatus === "idle" || hardwareStatus === "error" || hardwareStatus === "unsupported";
 
   return (
     <>
@@ -309,75 +305,74 @@ export default function LivePage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
-              {/* Status badge */}
+              {/* Session phase badge */}
               <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
                 isRunning
                   ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300"
                   : isStopped
                   ? "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                  : isConnected
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
                   : "bg-[#EAF0F8] text-[#6B7280] dark:bg-slate-800 dark:text-slate-400"
               }`}>
                 <span className={`inline-block h-2 w-2 rounded-full ${
-                  isRunning ? "animate-pulse bg-green-500" : isStopped ? "bg-slate-400" : "bg-gray-300"
+                  isRunning ? "animate-pulse bg-green-500"
+                  : isConnected ? "bg-blue-500"
+                  : isStopped ? "bg-slate-400"
+                  : "bg-gray-300"
                 }`} />
-                {isRunning ? "측정 중" : isStopped ? "중지됨" : "대기"}
+                {isRunning ? "측정 중" : isStopped ? "중지됨" : isConnected ? "연결됨" : "대기"}
               </span>
 
-              {/* Mode toggle — only when not measuring */}
-              {!isRunning ? (
-                <div className="flex overflow-hidden rounded-full border border-gray-200 text-xs font-semibold dark:border-slate-700">
+              {/* Action buttons */}
+              {isConnecting ? (
+                <button type="button" disabled
+                  className="cursor-wait rounded-full bg-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 dark:bg-slate-700 dark:text-slate-400">
+                  연결 중...
+                </button>
+              ) : canConnect ? (
+                <button
+                  type="button"
+                  onClick={() => void connectDevice()}
+                  className="rounded-full bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:opacity-90"
+                >
+                  장치 연결
+                </button>
+              ) : isConnected && !isRunning ? (
+                <>
                   <button
                     type="button"
-                    onClick={() => setSelectedMode("demo")}
-                    className={`px-3 py-1.5 transition-colors duration-150 ${
-                      selectedMode === "demo"
-                        ? "bg-[#2563EB] text-white"
-                        : "text-[#6B7280] hover:bg-[#EAF0F8] dark:text-slate-400 dark:hover:bg-slate-800"
-                    }`}
+                    onClick={startSession}
+                    className="rounded-full bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:opacity-90"
                   >
-                    Demo
+                    측정 시작
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSelectedMode("serial")}
-                    disabled={!serialSupported}
-                    className={`px-3 py-1.5 transition-colors duration-150 ${
-                      selectedMode === "serial"
-                        ? "bg-[#2563EB] text-white"
-                        : !serialSupported
-                        ? "cursor-not-allowed text-gray-300 dark:text-slate-600"
-                        : "text-[#6B7280] hover:bg-[#EAF0F8] dark:text-slate-400 dark:hover:bg-slate-800"
-                    }`}
-                    title={!serialSupported ? "Chrome / Edge 필요" : undefined}
+                    onClick={disconnectDevice}
+                    className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
-                    Serial
+                    연결 해제
                   </button>
-                </div>
+                </>
+              ) : isRunning ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={stopSession}
+                    className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
+                  >
+                    측정 종료
+                  </button>
+                  <button
+                    type="button"
+                    onClick={disconnectDevice}
+                    className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  >
+                    연결 해제
+                  </button>
+                </>
               ) : null}
-
-              {/* Single start / stop button */}
-              {isRunning ? (
-                <button
-                  type="button"
-                  onClick={stopSession}
-                  className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
-                >
-                  측정 종료
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void startSession()}
-                  disabled={hardwareBusy || (selectedMode === "serial" && !serialSupported)}
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
-                    hardwareBusy
-                      ? "cursor-wait bg-gray-200 text-gray-500 dark:bg-slate-700 dark:text-slate-400"
-                      : "bg-[#2563EB] text-white hover:opacity-90"
-                  }`}
-                >
-                  {hardwareBusy ? "연결 중..." : "측정 시작"}
-                </button>
-              )}
 
               {/* REC indicator */}
               {isRunning && recorderSummary.isRecording ? (
@@ -392,7 +387,7 @@ export default function LivePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400">
-            <span>{modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}</span>
+            <span>Web Serial</span>
             <span>·</span>
             <span>{signalLabel[state.signalStatus]}</span>
           </div>
@@ -458,7 +453,7 @@ export default function LivePage() {
           </p>
         </div>
 
-        {/* Secondary charts — hidden by default */}
+        {/* Secondary charts */}
         <div>
           <button
             type="button"
@@ -469,29 +464,28 @@ export default function LivePage() {
           </button>
 
           {showCharts ? (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <section className="fx2-card fx2-outline">
-                <h2 className="fx2-title mb-3">이벤트 로그</h2>
-                <ul
-                  ref={logContainerRef}
-                  onScroll={handleLogScroll}
-                  className="max-h-[180px] space-y-2 overflow-y-auto pr-1"
-                >
-                  {visibleLogs.length > 0 ? (
-                    visibleLogs.map((log, index) => (
-                      <li key={`${log}-${index}`} className="fx2-surface rounded-2xl px-3 py-2 text-xs leading-5 text-[#6B7280] dark:text-slate-300">{log}</li>
-                    ))
-                  ) : (
-                    <li className="fx2-surface rounded-2xl px-3 py-4 text-xs text-[#6B7280] dark:text-slate-400">아직 기록된 이벤트가 없습니다.</li>
-                  )}
-                </ul>
-              </section>
-
-              <LineChartCard values={secondary.heartRateHistory} color="#2563EB" label="심박 추이" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <LineChartCard values={secondary.heartRateHistory} color="#EF4444" label="심박 추이 (BPM)" />
               <LineChartCard values={secondary.ppg} timestamps={secondary.timestamps} color="#10B981" label="PPG" />
               <LineChartCard values={secondary.sdppg} timestamps={secondary.timestamps} color="#F59E0B" label="sdPPG" />
               <LineChartCard values={secondary.rrInterval} color="#8B5CF6" label="RR 간격 (ms)" />
               <LineChartCard values={secondary.powerSpectrum} color="#EC4899" label="파워 스펙트럼" />
+              <section className="fx2-card fx2-outline">
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">이벤트 로그</h2>
+                <ul
+                  ref={logContainerRef}
+                  onScroll={handleLogScroll}
+                  className="max-h-[120px] space-y-1.5 overflow-y-auto pr-1"
+                >
+                  {visibleLogs.length > 0 ? (
+                    visibleLogs.map((log, index) => (
+                      <li key={`${log}-${index}`} className="fx2-surface rounded-xl px-3 py-1.5 text-xs leading-5 text-[#6B7280] dark:text-slate-300">{log}</li>
+                    ))
+                  ) : (
+                    <li className="fx2-surface rounded-xl px-3 py-2 text-xs text-[#6B7280] dark:text-slate-400">아직 기록된 이벤트가 없습니다.</li>
+                  )}
+                </ul>
+              </section>
             </div>
           ) : null}
         </div>

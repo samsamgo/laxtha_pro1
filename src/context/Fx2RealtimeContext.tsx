@@ -12,7 +12,6 @@ import {
   appendLog,
   applyIncomingMessage,
   createInitialFx2State,
-  createMockMessage,
   parseUartBinaryFrame,
   summarizeFx2State
 } from "../lib/fx2Realtime";
@@ -33,9 +32,10 @@ interface Fx2RealtimeContextValue {
   hardwareStatus: Fx2HardwareStatus;
   recorderSummary: EegSessionSummary;
   setSelectedMode: (mode: DeviceMode) => void;
-  startSession: (modeOverride?: DeviceMode) => Promise<boolean>;
+  connectDevice: () => Promise<boolean>;
+  disconnectDevice: () => void;
+  startSession: () => void;
   stopSession: () => void;
-  disconnectHardware: () => void;
   appendSample: (sample: EegSample) => void;
   exportCsv: () => void;
   exportJson: () => void;
@@ -45,20 +45,19 @@ interface Fx2RealtimeContextValue {
 const Fx2RealtimeContext = createContext<Fx2RealtimeContextValue | null>(null);
 
 export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
-  const [selectedMode, setSelectedModeState] = useState<DeviceMode>("demo");
+  const [selectedMode] = useState<DeviceMode>("serial");
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>("idle");
-  const [state, setState] = useState<Fx2State>(() => createInitialFx2State("demo"));
+  const [state, setState] = useState<Fx2State>(() => createInitialFx2State("serial"));
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
 
   const hardwareRef = useRef(new Fx2HardwareService());
-  const mockTimerRef = useRef<number | null>(null);
   const stateRef = useRef(state);
   const pendingHardwareRef = useRef<Fx2IncomingMessage[]>([]);
-  const hardwareRafRef = useRef<number | null>(null);
   const recorderRef = useRef(new EegSessionRecorder());
   const recTickRef = useRef<number | null>(null);
-  // Controls whether incoming hardware frames are processed — false while session is stopped
+  const renderTickRef = useRef<number | null>(null);
   const sessionActiveRef = useRef(false);
+  const sessionPhaseRef = useRef<SessionPhase>("idle");
   const [recorderSummary, setRecorderSummary] = useState<EegSessionSummary>(
     () => recorderRef.current.getSummary()
   );
@@ -66,6 +65,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    sessionPhaseRef.current = sessionPhase;
+  }, [sessionPhase]);
 
   useEffect(() => {
     const hardware = hardwareRef.current;
@@ -80,51 +83,51 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
             logs: appendLog(prev.logs, event.detail || "하드웨어 연결 상태를 확인해 주세요."),
           }));
         }
+
+        // Hardware physically disconnected during session — stop recording
+        if (event.status === "idle" && sessionPhaseRef.current === "running") {
+          sessionActiveRef.current = false;
+          setSessionPhase("stopped");
+          setState((prev) => ({
+            ...prev,
+            connected: false,
+            logs: appendLog(prev.logs, "장치 연결이 끊어져 측정을 중단했습니다."),
+          }));
+        }
         return;
       }
 
-      // Discard frames when session is not active — keeps the serial port open for reconnect
       if (!sessionActiveRef.current) return;
 
       const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current);
-      if (!nextMessage) return; // PPD=0 standby frame
+      if (!nextMessage) return;
 
+      // Buffer frames; a 30Hz interval drains and applies them to avoid
+      // per-frame React renders at full 60Hz hardware rate
       pendingHardwareRef.current.push(nextMessage);
-
-      if (hardwareRafRef.current === null) {
-        hardwareRafRef.current = requestAnimationFrame(() => {
-          const messages = pendingHardwareRef.current;
-          pendingHardwareRef.current = [];
-          hardwareRafRef.current = null;
-
-          if (messages.length === 0 || !sessionActiveRef.current) return;
-
-          setState((prev) =>
-            messages.reduce((s, msg) => applyIncomingMessage(msg, s), prev)
-          );
-          const last = messages[messages.length - 1];
-          setSelectedModeState(last.mode);
-          setSessionPhase("running");
-        });
-      }
     });
+  }, []);
+
+  // 30Hz render tick: drains hardware frame buffer and applies to state
+  useEffect(() => {
+    renderTickRef.current = window.setInterval(() => {
+      if (!sessionActiveRef.current || pendingHardwareRef.current.length === 0) return;
+      const messages = pendingHardwareRef.current;
+      pendingHardwareRef.current = [];
+      setState((prev) => messages.reduce((s, msg) => applyIncomingMessage(msg, s), prev));
+    }, 33); // ~30 Hz
+    return () => {
+      if (renderTickRef.current !== null) window.clearInterval(renderTickRef.current);
+    };
   }, []);
 
   useEffect(() => {
     return () => {
-      if (mockTimerRef.current !== null) window.clearInterval(mockTimerRef.current);
-      if (hardwareRafRef.current !== null) cancelAnimationFrame(hardwareRafRef.current);
+      if (renderTickRef.current !== null) window.clearInterval(renderTickRef.current);
       if (recTickRef.current !== null) window.clearInterval(recTickRef.current);
       void hardwareRef.current.disconnect();
     };
   }, []);
-
-  const stopMockFeed = () => {
-    if (mockTimerRef.current !== null) {
-      window.clearInterval(mockTimerRef.current);
-      mockTimerRef.current = null;
-    }
-  };
 
   const startRecTick = () => {
     if (recTickRef.current !== null) return;
@@ -140,74 +143,47 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     }
   };
 
-  const resetState = (mode: DeviceMode) => {
-    setState(createInitialFx2State(mode));
+  // Connect hardware — shows port picker. Does NOT start recording.
+  const connectDevice = async (): Promise<boolean> => {
+    return hardwareRef.current.connectSerial();
   };
 
-  const connectHardware = async () => {
-    const connected = await hardwareRef.current.connectSerial();
-    if (!connected) {
-      sessionActiveRef.current = false;
-      setSessionPhase("idle");
+  // Disconnect hardware — closes port. Stops recording if running.
+  const disconnectDevice = () => {
+    sessionActiveRef.current = false;
+    pendingHardwareRef.current = [];
+    if (sessionPhaseRef.current === "running") {
+      recorderRef.current.stopRecording();
+      stopRecTick();
+      setRecorderSummary(recorderRef.current.getSummary());
     }
-    return connected;
+    void hardwareRef.current.disconnect();
+    setSessionPhase("idle");
+    setState((prev) => ({
+      ...prev,
+      connected: false,
+      logs: appendLog(prev.logs, "장치 연결을 해제했습니다."),
+    }));
   };
 
-  const startSession = async (modeOverride?: DeviceMode) => {
-    const nextMode = modeOverride ?? selectedMode;
-
-    stopMockFeed();
+  // Start recording — hardware must already be connected.
+  const startSession = () => {
     sessionActiveRef.current = true;
-    setSelectedModeState(nextMode);
-    resetState(nextMode);
+    setState(createInitialFx2State("serial"));
     setSessionPhase("running");
-
-    recorderRef.current.startRecording(nextMode);
+    recorderRef.current.startRecording("serial");
     setRecorderSummary(recorderRef.current.getSummary());
     startRecTick();
-
-    if (nextMode === "demo") {
-      await hardwareRef.current.disconnect();
-      mockTimerRef.current = window.setInterval(() => {
-        if (!sessionActiveRef.current) return;
-        setState((prev) => applyIncomingMessage(createMockMessage(prev), prev));
-      }, 1000);
-      return true;
-    }
-
-    // Serial: reuse existing connection without showing port picker again
-    if (hardwareRef.current.getStatus() === "connected") {
-      return true;
-    }
-
-    return connectHardware();
   };
 
-  // Stops data collection but keeps the serial port open for smooth reconnect
+  // Stop recording — keeps hardware connected for smooth restart.
   const stopSession = () => {
     sessionActiveRef.current = false;
-    stopMockFeed();
     setSessionPhase("stopped");
     setState((prev) => ({
       ...prev,
       connected: false,
-      logs: appendLog(prev.logs, "측정을 종료했습니다.")
-    }));
-    recorderRef.current.stopRecording();
-    stopRecTick();
-    setRecorderSummary(recorderRef.current.getSummary());
-  };
-
-  // Hard disconnect — releases the serial port
-  const disconnectHardware = () => {
-    sessionActiveRef.current = false;
-    stopMockFeed();
-    void hardwareRef.current.disconnect();
-    setSessionPhase("stopped");
-    setState((prev) => ({
-      ...prev,
-      connected: false,
-      logs: appendLog(prev.logs, "장치 연결을 해제했습니다.")
+      logs: appendLog(prev.logs, "측정을 종료했습니다."),
     }));
     recorderRef.current.stopRecording();
     stopRecTick();
@@ -227,9 +203,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     setRecorderSummary(recorderRef.current.getSummary());
   };
 
-  const setSelectedMode = (mode: DeviceMode) => {
-    setSelectedModeState(mode);
-    setState((prev) => ({ ...prev, mode }));
+  const setSelectedMode = (_mode: DeviceMode) => {
+    // only serial supported now — no-op kept for interface compatibility
   };
 
   const value = useMemo<Fx2RealtimeContextValue>(
@@ -241,9 +216,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       hardwareStatus,
       recorderSummary,
       setSelectedMode,
+      connectDevice,
+      disconnectDevice,
       startSession,
       stopSession,
-      disconnectHardware,
       appendSample,
       exportCsv,
       exportJson,

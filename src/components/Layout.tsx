@@ -31,10 +31,6 @@ const sessionPhaseLabelMap = {
   stopped: "종료됨",
 } as const;
 
-const modeLabelMap: Record<string, string> = {
-  serial: "Web Serial",
-  demo: "DEMO",
-};
 
 interface LayoutProps {
   children: ReactNode;
@@ -46,10 +42,9 @@ export default function Layout({ children, title }: LayoutProps) {
   const { darkMode, toggleDarkMode } = useFx2Theme();
   const {
     hardwareStatus,
-    selectedMode,
     sessionPhase,
-    disconnectHardware,
-    startSession,
+    disconnectDevice,
+    connectDevice,
   } = useFx2RealtimeSession();
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -77,16 +72,14 @@ export default function Layout({ children, title }: LayoutProps) {
   }, [hardwareStatus]);
 
   const canDisconnectHardware =
-    selectedMode !== "demo" &&
-    (hardwareStatus === "requesting" ||
-      hardwareStatus === "connecting" ||
-      hardwareStatus === "connected");
-  const canStartHardware =
-    selectedMode !== "demo" &&
-    (hardwareStatus === "idle" ||
-      hardwareStatus === "error" ||
-      hardwareStatus === "unsupported");
-  const canControlHardware = canDisconnectHardware || canStartHardware;
+    hardwareStatus === "requesting" ||
+    hardwareStatus === "connecting" ||
+    hardwareStatus === "connected";
+  const canConnectHardware =
+    hardwareStatus === "idle" ||
+    hardwareStatus === "error" ||
+    hardwareStatus === "unsupported";
+  const canControlHardware = canDisconnectHardware || canConnectHardware;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#F4F7FB] text-[#111827] transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
@@ -113,7 +106,7 @@ export default function Layout({ children, title }: LayoutProps) {
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span>장치 모드</span>
                 <span className="font-semibold text-slate-200">
-                  {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
+                  Web Serial
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-400">
@@ -219,9 +212,9 @@ export default function Layout({ children, title }: LayoutProps) {
             type="button"
             onClick={() => {
               if (canDisconnectHardware) {
-                disconnectHardware();
-              } else if (canStartHardware) {
-                void startSession();
+                disconnectDevice();
+              } else if (canConnectHardware) {
+                void connectDevice();
               }
             }}
             disabled={!canControlHardware}
@@ -232,7 +225,7 @@ export default function Layout({ children, title }: LayoutProps) {
             }`}
           >
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#6B7280] dark:text-slate-400">
-              {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()} · {sessionPhaseLabelMap[sessionPhase]}
+              Web Serial · {sessionPhaseLabelMap[sessionPhase]}
             </p>
             <p
               className={`mt-0.5 text-sm font-medium ${
@@ -241,8 +234,8 @@ export default function Layout({ children, title }: LayoutProps) {
             >
               {canDisconnectHardware
                 ? "연결 해제"
-                : canStartHardware
-                ? "다시 연결"
+                : canConnectHardware
+                ? "장치 연결"
                 : hardwareLabelMap[hardwareStatus]}
             </p>
           </button>
@@ -262,7 +255,7 @@ export default function Layout({ children, title }: LayoutProps) {
               <div>
                 <p>장치 모드</p>
                 <p className="mt-1 font-semibold text-[#111827] dark:text-white">
-                  {modeLabelMap[selectedMode] ?? selectedMode.toUpperCase()}
+                  Web Serial
                 </p>
               </div>
               <div>

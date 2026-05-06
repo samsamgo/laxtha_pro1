@@ -12,11 +12,12 @@ export const MAX_CHART_POINTS = 72000; // 20 min at 60 Hz hardware; months at 1 
 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
-const clampArray = <T,>(values: T[], max: number) =>
-  values.slice(Math.max(values.length - max, 0));
-
-const appendValue = <T,>(history: T[], value: T, max: number) =>
-  clampArray([...history, value], max);
+// Single-copy append: avoids the double-allocation of [...arr, v].slice()
+const appendValue = <T,>(history: T[], value: T, max: number): T[] => {
+  const next = history.length < max ? history.slice() : history.slice(1);
+  next.push(value);
+  return next;
+};
 
 const roundToSingleDecimal = (value: number) => Math.round(value * 10) / 10;
 
@@ -67,7 +68,7 @@ export const toSignalStatus = (quality: number): SignalStatus => {
   return "poor";
 };
 
-export const createInitialFx2State = (mode: DeviceMode = "demo"): Fx2State => {
+export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => {
   const startedAt = new Date().toISOString();
 
   return {
@@ -185,8 +186,8 @@ export const parseUartBinaryFrame = (
   };
 };
 
-export const appendLog = (logs: string[], message: string) =>
-  clampArray([...logs, message], LOG_HISTORY_LIMIT);
+export const appendLog = (logs: string[], message: string): string[] =>
+  appendValue(logs, message, LOG_HISTORY_LIMIT);
 
 export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State): Fx2State => {
   const nextTimestamp = normalizeTimestamp(

@@ -9,7 +9,7 @@ FX2 뇌파(EEG) 장치 출력을 Chrome 전용 실시간 웹 대시보드로 시
 ## 기술 스택
 - **프레임워크**: React 18 + TypeScript 5.6 + Vite
 - **스타일**: Tailwind CSS 3 (`dark:` class 방식 다크모드)
-- **차트**: uPlot (EEGChartV2 메인 EEG 차트) + Chart.js/react-chartjs-2 (LineChartCard 보조 차트)
+- **차트**: uPlot 전용 — EEGChartV2 (메인 EEG), LineChartCard (보조 5개, 4Hz throttle)
 - **배포**: Netlify (`netlify.toml`, SPA redirect 설정됨)
 - **URL**: https://laxtha.netlify.app
 
@@ -42,7 +42,6 @@ src/
 │   └── ThemeContext.tsx        # 다크모드 (localStorage + .dark 클래스)
 │
 ├── hooks/
-│   ├── useFx2Realtime.ts       # (현재 미사용, context에 통합됨)
 │   └── useEegSessionRecorder.ts # EEG 세션 녹화 훅
 │
 ├── components/
@@ -50,9 +49,7 @@ src/
 │   ├── EEGChartV2.tsx          # 메인 EEG 차트 (uPlot, memo 적용, ResizeObserver cleanup)
 │   │                           # 윈도우 10/30/60/120/300s (더보기 드롭다운)
 │   │                           # 일시정지, 줌/팬, Go Live, PNG 캡처
-│   ├── LineChartCard.tsx       # 심박/PPG/sdPPG/RR 추이 차트 (lightweight-charts)
-│   ├── HiddenDemoPanel.tsx     # 시연용 슬라이드 패널 (preset 적용)
-│   └── StatusCard.tsx          # (현재 미사용, LivePage에서 인라인 처리)
+│   └── LineChartCard.tsx       # 보조 차트 (uPlot, 4Hz throttle, ResizeObserver, no header)
 │
 └── pages/
     ├── HomePage.tsx            # 모드 선택 + 측정 시작 버튼
@@ -122,7 +119,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-04 기준)
 
-최신 커밋: `0650934 Add signal quality sparkline to signal status card`
+최신 커밋: `70127da Perf: migrate secondary charts to uPlot, remove dead code & Chart.js`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -203,13 +200,23 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] LineChartCard 빈 상태 — 측정 전 "--" + placeholder 텍스트 표시
 - [x] HomePage 2열 그리드 (max-w-xl), 헤더 간소화, 모바일 풀-너비 버튼
 - [x] SummaryPage 세션 항목 구분선, 카드 테두리, 레이블 타이포그래피
+- [x] Y-axis amplitude zoom 프리셋 (Auto/±0.5/±1/±2/±5/±10 μV), μV 레이블, 일시정지 오버레이 배지
+- [x] Space/L 키보드 단축키 (EEGChartV2), 조작 힌트 텍스트 추가
+- [x] BPM + 신호품질 미니 스파크라인 (상태 카드 내)
+- [x] SummaryPage RR/HRV 패널 + 세션 시작시간/녹화시간 + 파일크기 추정
+- [x] **[세션7 최적화]** LineChartCard → uPlot 완전 교체 (Chart.js/react-chartjs-2 제거, ResizeObserver)
+- [x] 보조 차트 데이터 4Hz throttle — 60Hz 하드웨어에서 2차 차트 렌더 압박 방지
+- [x] hardwareDiagnostics 상태 제거 — 60Hz setState 없앰 (소비자 없는 dead 상태)
+- [x] HiddenDemoPanel, StatusCard, useFx2Realtime.ts 삭제 (dead code)
+- [x] pushManualUpdate / applyPreset / DemoPreset / buildMessageFromState context에서 제거
+- [x] LivePage 진단 스트립(11타일), 데모 패널, auto-save 체크박스, SidebarSummary 제거
+- [x] LineChartCard: title/subtitle/latest-value 배지 제거 — 차트 캔버스만 표시
 
 ### 미완료
-- [ ] **[하드웨어] OMC-M10 실기기 검증** — 진단 스트립: Frames 증가, PPD=1 수신, PC 0-31 순환, 드롭=0, PUD0 bit6/bit2, BPM/RR 정상값, 전극 도트 방향(1=연결?) 확인
-- [ ] **[하드웨어] 차트 시간창 실기기 확인** — 30s/60s 선택 시 실제 timestamp 기준으로 맞는지 확인
-- [ ] **[하드웨어] PPG/sdPPG/RR/파워스펙트럼 0 고정 여부** — CH4/CH5/CH6/CH3 실기기에서 움직이는지 확인
+- [ ] **[하드웨어] OMC-M10 실기기 연결 검증** — PPD=1 수신, BPM/RR 정상값, 차트 시간창 timestamp 확인
+- [ ] **[하드웨어] PPG/sdPPG/RR/파워스펙트럼 신호 검증** — CH4/CH5/CH6/CH3 실기기에서 값 변화 여부
 - [ ] **[하드웨어] 장시간 성능** — 5분 이상 연결 시 메모리/CPU 안정성 확인
-- [ ] **[검증 후] 전극 도트 방향 수정** — 하드웨어 테스트 후 bit5/4/3이 1=연결인지 1=분리인지 확인하고 수정
+- [ ] **[UX] 보조 차트 레이블** — 차트 아래 작은 텍스트 레이블 추가 여부 검토 (현재 레이블 없음)
 
 ---
 

@@ -5,14 +5,12 @@ import {
   useMemo,
   useRef,
   useState,
-  type Dispatch,
   type PropsWithChildren
 } from "react";
 import { EegSessionRecorder } from "../lib/eegSessionRecorder";
 import {
   appendLog,
   applyIncomingMessage,
-  buildMessageFromState,
   createInitialFx2State,
   createMockMessage,
   parseUartBinaryFrame,
@@ -23,27 +21,9 @@ import {
   type Fx2HardwareStatus,
 } from "../services/fx2Hardware";
 import type { EegSample, EegSessionSummary } from "../types/eegRecorder";
-import type { DeviceMode, Fx2BinaryFrame, Fx2IncomingMessage, Fx2State } from "../types/fx2";
-
-type DemoPreset = "balanced" | "weakSignal" | "notWorn" | "disconnected" | "reset";
+import type { DeviceMode, Fx2IncomingMessage, Fx2State } from "../types/fx2";
 
 type SessionPhase = "idle" | "running" | "stopped";
-
-export interface Fx2HardwareDiagnostics {
-  totalFrames: number;
-  ppdValidFrames: number;
-  ppdStandbyFrames: number;
-  droppedFrames: number;
-  lastPpd: boolean | null;
-  lastPud0: number | null;
-  lastPc: number | null;
-  lastBpm: number | null;
-  lastRrInterval: number | null;
-  lastCh1Raw: number | null;
-  lastCh2Raw: number | null;
-  lastElectrodeStatus: number | null;
-  lastFrameAt: string | null;
-}
 
 interface Fx2RealtimeContextValue {
   state: Fx2State;
@@ -52,14 +32,11 @@ interface Fx2RealtimeContextValue {
   sessionPhase: SessionPhase;
   hardwareStatus: Fx2HardwareStatus;
   hardwareDetail: string;
-  hardwareDiagnostics: Fx2HardwareDiagnostics;
   recorderSummary: EegSessionSummary;
   setSelectedMode: (mode: DeviceMode) => void;
   startSession: (modeOverride?: DeviceMode) => Promise<boolean>;
   stopSession: () => void;
   disconnectHardware: () => void;
-  pushManualUpdate: (patch: Partial<Fx2IncomingMessage>) => boolean;
-  applyPreset: (preset: DemoPreset) => void;
   appendSample: (sample: EegSample) => void;
   exportCsv: () => void;
   exportJson: () => void;
@@ -68,62 +45,12 @@ interface Fx2RealtimeContextValue {
 
 const Fx2RealtimeContext = createContext<Fx2RealtimeContextValue | null>(null);
 
-const createInitialHardwareDiagnostics = (): Fx2HardwareDiagnostics => ({
-  totalFrames: 0,
-  ppdValidFrames: 0,
-  ppdStandbyFrames: 0,
-  droppedFrames: 0,
-  lastPpd: null,
-  lastPud0: null,
-  lastPc: null,
-  lastBpm: null,
-  lastRrInterval: null,
-  lastCh1Raw: null,
-  lastCh2Raw: null,
-  lastElectrodeStatus: null,
-  lastFrameAt: null,
-});
-
-const updateUartDiagnostics = (
-  prev: Fx2HardwareDiagnostics,
-  frame: Fx2BinaryFrame
-): Fx2HardwareDiagnostics => {
-  // PC cycles 0-31; check for non-consecutive value to detect dropped frames
-  const expectedPc = prev.lastPc !== null ? (prev.lastPc + 1) % 32 : null;
-  const pcDropped = expectedPc !== null && frame.pc !== expectedPc ? 1 : 0;
-
-  return {
-    totalFrames: prev.totalFrames + 1,
-    ppdValidFrames: prev.ppdValidFrames + (frame.ppd ? 1 : 0),
-    ppdStandbyFrames: prev.ppdStandbyFrames + (frame.ppd ? 0 : 1),
-    droppedFrames: prev.droppedFrames + pcDropped,
-    lastPpd: frame.ppd,
-    lastPud0: frame.pud0,
-    lastPc: frame.pc,
-    lastBpm: frame.bpm,
-    lastRrInterval: frame.ch6Raw,
-    lastCh1Raw: frame.ch1Raw,
-    lastCh2Raw: frame.ch2Raw,
-    lastElectrodeStatus: frame.electrodeStatus,
-    lastFrameAt: new Date().toISOString(),
-  };
-};
-
-const applyLocalMessage = (
-  nextMessage: Fx2IncomingMessage,
-  setState: Dispatch<React.SetStateAction<Fx2State>>
-) => {
-  setState((prev) => applyIncomingMessage(nextMessage, prev));
-};
-
 export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [selectedMode, setSelectedModeState] = useState<DeviceMode>("demo");
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>("idle");
   const [state, setState] = useState<Fx2State>(() => createInitialFx2State("demo"));
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
   const [hardwareDetail, setHardwareDetail] = useState("");
-  const [hardwareDiagnostics, setHardwareDiagnostics] =
-    useState<Fx2HardwareDiagnostics>(() => createInitialHardwareDiagnostics());
 
   const hardwareRef = useRef(new Fx2HardwareService());
   const mockTimerRef = useRef<number | null>(null);
@@ -170,7 +97,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         return;
       }
 
-      setHardwareDiagnostics((prev) => updateUartDiagnostics(prev, event.frame));
       const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current);
 
       if (!nextMessage) {
@@ -237,7 +163,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
   const resetState = (mode: DeviceMode) => {
     setState(createInitialFx2State(mode));
-    setHardwareDiagnostics(createInitialHardwareDiagnostics());
   };
 
   const connectHardware = async () => {
@@ -287,61 +212,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     setRecorderSummary(recorderRef.current.getSummary());
   };
 
-  const pushManualUpdate = (patch: Partial<Fx2IncomingMessage>) => {
-    if (selectedMode === "demo") {
-      stopMockFeed();
-    }
-
-    const nextMessage = buildMessageFromState(
-      { ...state, mode: selectedMode },
-      { ...patch, mode: selectedMode }
-    );
-    applyLocalMessage(nextMessage, setState);
-    setSessionPhase("running");
-    return true;
-  };
-
-  const applyPreset = (preset: DemoPreset) => {
-    switch (preset) {
-      case "balanced":
-        pushManualUpdate({
-          ch1: 1.4,
-          ch2: 1.2,
-          bpm: 72,
-          wearing: true,
-          signalQuality: 90,
-          connection: "connected",
-          noise: false
-        });
-        break;
-      case "weakSignal":
-        pushManualUpdate({
-          signalQuality: 34,
-          noise: true,
-          connection: "connected"
-        });
-        break;
-      case "notWorn":
-        pushManualUpdate({
-          wearing: false,
-          signalQuality: 18,
-          connection: "connected",
-          noise: true
-        });
-        break;
-      case "disconnected":
-        pushManualUpdate({
-          connection: "disconnected",
-          signalQuality: 12,
-          noise: true
-        });
-        break;
-      case "reset":
-        resetState(selectedMode);
-        break;
-    }
-  };
-
   const disconnectHardware = () => {
     stopMockFeed();
     void hardwareRef.current.disconnect();
@@ -387,14 +257,11 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       sessionPhase,
       hardwareStatus,
       hardwareDetail,
-      hardwareDiagnostics,
       recorderSummary,
       setSelectedMode,
       startSession,
       stopSession,
       disconnectHardware,
-      pushManualUpdate,
-      applyPreset,
       appendSample,
       exportCsv,
       exportJson,
@@ -402,7 +269,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     }),
     [
       hardwareDetail,
-      hardwareDiagnostics,
       hardwareStatus,
       recorderSummary,
       selectedMode,

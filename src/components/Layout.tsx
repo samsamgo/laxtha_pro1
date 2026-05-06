@@ -37,52 +37,9 @@ const modeLabelMap: Record<string, string> = {
   demo: "DEMO",
 };
 
-const formatDuration = (seconds: number) => {
-  const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const mm = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const ss = String(seconds % 60).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
-};
-
 interface LayoutProps {
   children: ReactNode;
   title: string;
-}
-
-function SidebarSummary({
-  averageBpm,
-  stabilityScore,
-  sessionSeconds,
-}: {
-  averageBpm: number;
-  stabilityScore: number;
-  sessionSeconds: number;
-}) {
-  return (
-    <div className="rounded-2xl bg-[#1E293B] p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-        세션 인사이트
-      </p>
-      <div className="mt-4 space-y-3">
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span>평균 BPM</span>
-          <span className="font-semibold text-slate-100">{averageBpm} bpm</span>
-        </div>
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span>안정도 점수</span>
-          <span className="font-semibold text-slate-100">
-            {stabilityScore === 0 ? "—" : `${stabilityScore}%`}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span>세션 시간</span>
-          <span className="font-semibold text-slate-100">
-            {formatDuration(sessionSeconds)}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function Layout({ children, title }: LayoutProps) {
@@ -94,8 +51,6 @@ export default function Layout({ children, title }: LayoutProps) {
     sessionPhase,
     disconnectHardware,
     startSession,
-    state,
-    summary,
   } = useFx2RealtimeSession();
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -126,7 +81,6 @@ export default function Layout({ children, title }: LayoutProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hardwareStatus]);
 
-  const averageBpm = summary.averageHeartRate || state.heartRate;
   const canDisconnectHardware =
     selectedMode !== "demo" &&
     (hardwareStatus === "requesting" ||
@@ -200,7 +154,7 @@ export default function Layout({ children, title }: LayoutProps) {
           </div>
         </nav>
 
-        <div className="space-y-3 border-t border-[#1E293B] p-4">
+        <div className="border-t border-[#1E293B] p-4">
           <button
             type="button"
             onClick={toggleDarkMode}
@@ -208,12 +162,7 @@ export default function Layout({ children, title }: LayoutProps) {
           >
             {darkMode ? (
               <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="h-3.5 w-3.5 text-yellow-300"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-yellow-300">
                   <circle cx="12" cy="12" r="4" />
                   <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
                 </svg>
@@ -221,23 +170,13 @@ export default function Layout({ children, title }: LayoutProps) {
               </>
             ) : (
               <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="h-3.5 w-3.5 text-slate-300"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-slate-300">
                   <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
                 </svg>
                 다크 모드
               </>
             )}
           </button>
-          <SidebarSummary
-            averageBpm={averageBpm}
-            stabilityScore={summary.stabilityScore}
-            sessionSeconds={state.sessionSeconds}
-          />
         </div>
       </aside>
 
@@ -328,13 +267,6 @@ export default function Layout({ children, title }: LayoutProps) {
                 </p>
               </div>
             </div>
-          </div>
-          <div className="rounded-card bg-[#0F172A] p-4 shadow-card">
-            <SidebarSummary
-              averageBpm={averageBpm}
-              stabilityScore={summary.stabilityScore}
-              sessionSeconds={state.sessionSeconds}
-            />
           </div>
         </div>
       ) : null}

@@ -7,7 +7,6 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import EEGChartV2 from "../components/EEGChartV2";
-import HiddenDemoPanel from "../components/HiddenDemoPanel";
 import LineChartCard from "../components/LineChartCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
@@ -32,12 +31,6 @@ const formatFileSize = (bytes: number): string => {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   return `${Math.ceil(bytes / 1024)}KB`;
 };
-
-const formatHexByte = (value: number | null) =>
-  value === null ? "—" : `0x${value.toString(16).padStart(2, "0").toUpperCase()}`;
-
-const formatDiagnosticNumber = (value: number | null, suffix = "") =>
-  value === null ? "—" : `${value}${suffix}`;
 
 const getBpmValueClassName = (bpm: number): string => {
   if (bpm < 50 || bpm > 130) return "text-[#EF4444] dark:text-red-400";
@@ -164,18 +157,14 @@ function CompactStatusItem({
 export default function LivePage() {
   const {
     state,
-    summary,
     selectedMode,
     sessionPhase,
     hardwareStatus,
     hardwareDetail,
-    hardwareDiagnostics,
     recorderSummary,
     startSession,
     stopSession,
     disconnectHardware,
-    pushManualUpdate,
-    applyPreset,
     appendSample,
     exportCsv,
     exportJson,
@@ -183,41 +172,32 @@ export default function LivePage() {
   } = useFx2RealtimeSession();
   const { chartTheme } = useFx2Theme();
 
-  const [panelOpen, setPanelOpen] = useState(false);
   const [windowSeconds, setWindowSeconds] = useState<ExtWindowSeconds>(30);
   const [paused, setPaused] = useState(false);
   const [ch1Visible, setCh1Visible] = useState(true);
   const [ch2Visible, setCh2Visible] = useState(true);
-  const [autoScrollLogs, setAutoScrollLogs] = useState(true);
-  const [eventLogExpanded, setEventLogExpanded] = useState(
-    typeof window !== "undefined" ? window.innerWidth >= 640 : true
-  );
-  const [autoSaveCsv, setAutoSaveCsv] = useState(false);
-  const [secondaryCollapsed, setSecondaryCollapsed] = useState(false);
-  const [diagCollapsed, setDiagCollapsed] = useState(false);
-
   const logContainerRef = useRef<HTMLUListElement | null>(null);
   const logPinnedRef = useRef(true);
   const prevPhaseRef = useRef(sessionPhase);
   const sessionStartTsRef = useRef<number | null>(null);
-  const autoSaveCsvRef = useRef(autoSaveCsv);
-  useEffect(() => { autoSaveCsvRef.current = autoSaveCsv; }, [autoSaveCsv]);
 
-  // Track session phase transitions — recorder lifecycle is handled in context
+  // Throttle secondary chart data to ~4Hz to reduce render pressure at 60Hz hardware rate
+  const secondaryRef = useRef(state);
+  secondaryRef.current = state;
+  const [secondary, setSecondary] = useState(state);
+  useEffect(() => {
+    const id = window.setInterval(() => { setSecondary(secondaryRef.current); }, 250);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => {
     const prev = prevPhaseRef.current;
     prevPhaseRef.current = sessionPhase;
-
     if (prev === sessionPhase) return;
-
     if (sessionPhase === "running") {
       sessionStartTsRef.current = Date.now();
-    } else if (sessionPhase === "stopped" && prev === "running") {
-      if (autoSaveCsvRef.current) {
-        setTimeout(() => exportCsv(), 50);
-      }
     }
-  }, [sessionPhase, exportCsv]);
+  }, [sessionPhase]);
 
   // Append one sample per state update (each new data point)
   const prevTimestampLengthRef = useRef(state.timestamps.length);
@@ -281,33 +261,10 @@ export default function LivePage() {
     };
   }, [state.ch1, state.ch2, state.timestamps]);
 
-  const latestRrInterval = state.rrInterval[state.rrInterval.length - 1] ?? 0;
-  const rrDerivedBpm = latestRrInterval > 0 ? Math.round(60000 / latestRrInterval) : 0;
-  const showHardwareDiagnostics =
-    selectedMode !== "demo" || hardwareDiagnostics.totalFrames > 0;
-  const lastFrameAtLabel = hardwareDiagnostics.lastFrameAt
-    ? new Date(hardwareDiagnostics.lastFrameAt).toLocaleTimeString("ko-KR")
-    : "—";
-
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const mediaQuery = window.matchMedia("(min-width: 640px)");
-    const syncExpanded = (matches: boolean) => {
-      if (matches) { setEventLogExpanded(true); return; }
-      setEventLogExpanded(false);
-    };
-
-    const handleChange = (event: MediaQueryListEvent) => syncExpanded(event.matches);
-    syncExpanded(mediaQuery.matches);
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
-  useEffect(() => {
-    if (!autoScrollLogs || !logPinnedRef.current) return;
+    if (!logPinnedRef.current) return;
     logContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [autoScrollLogs, visibleLogs]);
+  }, [visibleLogs]);
 
   const handleLogScroll = () => {
     const node = logContainerRef.current;
@@ -465,26 +422,6 @@ export default function LivePage() {
                 </div>
               ) : null}
 
-              {/* Auto-save CSV toggle — visible while running */}
-              {isRunning ? (
-                <label className="flex cursor-pointer items-center gap-2 rounded-full bg-[#EAF0F8] px-3 py-2 text-xs font-semibold text-[#6B7280] dark:bg-slate-800 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={autoSaveCsv}
-                    onChange={(e) => setAutoSaveCsv(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-[#2563EB]"
-                  />
-                  종료 시 CSV 저장
-                </label>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => setPanelOpen((c) => !c)}
-                className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-slate-800 dark:text-slate-300"
-              >
-                {panelOpen ? "데모 패널 숨기기" : "데모 패널 열기"}
-              </button>
             </div>
           </div>
 
@@ -507,155 +444,6 @@ export default function LivePage() {
           </div>
         ) : null}
 
-        {showHardwareDiagnostics ? (
-          <section className="fx2-card fx2-outline">
-            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="fx2-title">Web Serial 진단</h2>
-                <p className="text-xs leading-5 text-[#6B7280] dark:text-slate-400">
-                  Web Serial 프레임 수신, PPD 상태, PUD0/RR/raw 값을 연결 중에 바로 확인합니다.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                  마지막 프레임 {lastFrameAtLabel}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setDiagCollapsed((c) => !c)}
-                  className="rounded-full bg-[#EAF0F8] px-3 py-1 text-xs font-semibold text-[#6B7280] transition-colors hover:bg-[#2563EB] hover:text-white dark:bg-slate-700 dark:text-slate-300"
-                >
-                  {diagCollapsed ? "펼치기" : "접기"}
-                </button>
-              </div>
-            </div>
-
-            {diagCollapsed ? null : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-11">
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  Frames
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
-                  {hardwareDiagnostics.totalFrames.toLocaleString()}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  PC
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
-                  {formatDiagnosticNumber(hardwareDiagnostics.lastPc)}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  드롭
-                </p>
-                <p className={`mt-1 text-lg font-bold ${hardwareDiagnostics.droppedFrames > 0 ? "text-red-500 dark:text-red-400" : "text-[#111827] dark:text-white"}`}>
-                  {hardwareDiagnostics.droppedFrames}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  PPD=1
-                </p>
-                <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-300">
-                  {hardwareDiagnostics.ppdValidFrames.toLocaleString()}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  PPD=0
-                </p>
-                <p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-300">
-                  {hardwareDiagnostics.ppdStandbyFrames.toLocaleString()}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  PUD0
-                </p>
-                <p className="mt-1 text-base font-bold text-[#111827] dark:text-white">
-                  {formatHexByte(hardwareDiagnostics.lastPud0)}
-                </p>
-                {hardwareDiagnostics.lastPud0 !== null ? (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {[
-                      { label: "착용", bit: 0x40 },
-                      { label: "PPG", bit: 0x04 },
-                      { label: "배터리", bit: 0x10 },
-                    ].map(({ label, bit }) => {
-                      const on = Boolean(hardwareDiagnostics.lastPud0! & bit);
-                      return (
-                        <span key={label} className={`rounded px-1 py-0.5 text-[8px] font-bold leading-none ${on ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300" : "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500"}`}>
-                          {label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  BPM
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
-                  {formatDiagnosticNumber(hardwareDiagnostics.lastBpm)}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  RR
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
-                  {formatDiagnosticNumber(hardwareDiagnostics.lastRrInterval, " ms")}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  CH1 raw
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
-                  {formatDiagnosticNumber(hardwareDiagnostics.lastCh1Raw)}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  CH2 raw
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">
-                  {formatDiagnosticNumber(hardwareDiagnostics.lastCh2Raw)}
-                </p>
-              </div>
-              <div className="fx2-surface rounded-2xl px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] dark:text-slate-400">
-                  전극 (E1/E2/REF)
-                </p>
-                {hardwareDiagnostics.lastElectrodeStatus === null ? (
-                  <p className="mt-1 text-lg font-bold text-[#111827] dark:text-white">—</p>
-                ) : (
-                  <div className="mt-2 flex items-center gap-1.5">
-                    {[
-                      { label: "E1", bit: 0x20 },
-                      { label: "E2", bit: 0x10 },
-                      { label: "REF", bit: 0x08 },
-                    ].map(({ label, bit }) => {
-                      const on = Boolean(hardwareDiagnostics.lastElectrodeStatus! & bit);
-                      return (
-                        <span key={label} className="flex flex-col items-center gap-0.5">
-                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${on ? "bg-green-500" : "bg-red-400"}`} />
-                          <span className="text-[9px] font-semibold text-[#6B7280] dark:text-slate-400">{label}</span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-            )}
-          </section>
-        ) : null}
 
         {/* Export section — shown after session ends if recording exists */}
         {isStopped && recorderSummary.hasRecording ? (
@@ -738,147 +526,39 @@ export default function LivePage() {
           </p>
         </div>
 
-        {/* Bottom row */}
+        {/* Secondary charts */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <section className="fx2-card fx2-outline xl:col-span-2 -mb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="fx2-title text-base">이벤트 &amp; 보조 신호</h2>
-                <p className="text-xs text-[#6B7280] dark:text-slate-400">이벤트 로그와 PPG, RR, 파워스펙트럼 추이</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSecondaryCollapsed((c) => !c)}
-                className="rounded-full bg-[#EAF0F8] px-3 py-1 text-xs font-semibold text-[#6B7280] transition-colors hover:bg-[#2563EB] hover:text-white dark:bg-slate-700 dark:text-slate-300"
-              >
-                {secondaryCollapsed ? "펼치기 ▾" : "접기 ▴"}
-              </button>
-            </div>
-          </section>
-
-          {secondaryCollapsed ? null : (
-          <>
           <section className="fx2-card fx2-outline">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="fx2-title">이벤트 로그</h2>
-                <p className="mt-1 text-xs text-[#6B7280] dark:text-slate-400">
-                  최신 기록이 위에 오며, 최대 10개까지 표시됩니다.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAutoScrollLogs((c) => !c)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
-                    autoScrollLogs
-                      ? "bg-[#2563EB] text-white"
-                      : "bg-[#EAF0F8] text-[#6B7280] hover:bg-[#2563EB] hover:text-white dark:bg-slate-800 dark:text-slate-300"
-                  }`}
-                >
-                  자동 스크롤
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEventLogExpanded((c) => !c)}
-                  className="rounded-full bg-[#EAF0F8] px-3 py-1.5 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:hidden"
-                >
-                  {eventLogExpanded ? "접기" : "펼치기"}
-                </button>
-              </div>
-            </div>
-
-            {eventLogExpanded ? (
-              <ul
-                ref={logContainerRef}
-                onScroll={handleLogScroll}
-                className="max-h-[240px] space-y-2 overflow-y-auto pr-1"
-              >
-                {visibleLogs.length > 0 ? (
-                  visibleLogs.map((log, index) => (
-                    <li
-                      key={`${log}-${index}`}
-                      className="fx2-surface rounded-2xl px-3 py-2 text-xs leading-5 text-[#6B7280] dark:text-slate-300"
-                    >
-                      {log}
-                    </li>
-                  ))
-                ) : (
-                  <li className="fx2-surface rounded-2xl px-3 py-4 text-xs text-[#6B7280] dark:text-slate-400">
-                    아직 기록된 이벤트가 없습니다.
+            <h2 className="fx2-title mb-3">이벤트 로그</h2>
+            <ul
+              ref={logContainerRef}
+              onScroll={handleLogScroll}
+              className="max-h-[200px] space-y-2 overflow-y-auto pr-1"
+            >
+              {visibleLogs.length > 0 ? (
+                visibleLogs.map((log, index) => (
+                  <li
+                    key={`${log}-${index}`}
+                    className="fx2-surface rounded-2xl px-3 py-2 text-xs leading-5 text-[#6B7280] dark:text-slate-300"
+                  >
+                    {log}
                   </li>
-                )}
-              </ul>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEventLogExpanded(true)}
-                className="fx2-surface w-full rounded-2xl px-4 py-4 text-left text-sm font-medium text-[#111827] transition-colors duration-200 dark:text-white"
-              >
-                이벤트 로그 열기
-                <p className="mt-1 text-xs font-normal text-[#6B7280] dark:text-slate-400">
-                  최근 {visibleLogs.length}개의 로그가 준비되어 있습니다.
-                </p>
-              </button>
-            )}
+                ))
+              ) : (
+                <li className="fx2-surface rounded-2xl px-3 py-4 text-xs text-[#6B7280] dark:text-slate-400">
+                  아직 기록된 이벤트가 없습니다.
+                </li>
+              )}
+            </ul>
           </section>
 
-          <LineChartCard
-            title="심박 추이"
-            subtitle={`평균 ${summary.averageHeartRate || state.heartRate} bpm · 안정도 ${summary.stabilityScore}%`}
-            values={state.heartRateHistory}
-            color="#2563EB"
-          />
-
-          <LineChartCard
-            title="PPG 추이"
-            subtitle={`최근 ${state.ppg[state.ppg.length - 1]?.toFixed(2) ?? "0.00"} · 맥파 원신호`}
-            values={state.ppg}
-            timestamps={state.timestamps}
-            color="#10B981"
-          />
-
-          <LineChartCard
-            title="sdPPG 추이"
-            subtitle={`최근 ${state.sdppg[state.sdppg.length - 1]?.toFixed(2) ?? "0.00"} · 2차 미분 맥파`}
-            values={state.sdppg}
-            timestamps={state.timestamps}
-            color="#F59E0B"
-          />
-
-          <LineChartCard
-            title="RR 간격"
-            subtitle={
-              latestRrInterval > 0
-                ? `최근 ${latestRrInterval} ms · 추정 ${rrDerivedBpm} bpm`
-                : "아직 유효한 RR 간격 없음"
-            }
-            values={state.rrInterval}
-            color="#8B5CF6"
-          />
-
-          <LineChartCard
-            title="파워 스펙트럼 (CH3)"
-            subtitle={
-              state.powerSpectrum.length > 0
-                ? `최근 ${(state.powerSpectrum[state.powerSpectrum.length - 1] ?? 0).toFixed(1)} · 2.048s마다 갱신`
-                : "아직 데이터 없음"
-            }
-            values={state.powerSpectrum}
-            color="#EC4899"
-          />
-          </>
-          )}
+          <LineChartCard values={secondary.heartRateHistory} color="#2563EB" />
+          <LineChartCard values={secondary.ppg} timestamps={secondary.timestamps} color="#10B981" />
+          <LineChartCard values={secondary.sdppg} timestamps={secondary.timestamps} color="#F59E0B" />
+          <LineChartCard values={secondary.rrInterval} color="#8B5CF6" />
+          <LineChartCard values={secondary.powerSpectrum} color="#EC4899" />
         </div>
       </div>
-
-      <HiddenDemoPanel
-        open={panelOpen}
-        state={state}
-        onClose={() => setPanelOpen(false)}
-        onPatch={(patch) => pushManualUpdate(patch)}
-        onApplyPreset={applyPreset}
-      />
     </>
   );
 }

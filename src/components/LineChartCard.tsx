@@ -49,7 +49,6 @@ function makeOpts(w: number, color: string, darkMode: boolean): uPlot.Options {
       {},
       {
         stroke: color,
-        fill: `${color}18`,
         width: 1.5,
         points: { show: false },
       },

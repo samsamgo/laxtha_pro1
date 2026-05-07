@@ -159,13 +159,6 @@ export const parseUartBinaryFrame = (
   // so recording auto-resumes the moment the sensor is re-worn (no data gap visible)
   if (!wearing) return null;
 
-  const ch1ElectrodeOk = Boolean(frame.electrodeStatus & 0x20);
-  const ch2ElectrodeOk = Boolean(frame.electrodeStatus & 0x10);
-  const refElectrodeOk = Boolean(frame.electrodeStatus & 0x08);
-  const eegElectrodesOk = ch1ElectrodeOk && ch2ElectrodeOk && refElectrodeOk;
-
-  if (!eegElectrodesOk) return null;
-
   const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
   const ppg = (frame.ch4Raw - EEG_CENTER) * EEG_SCALE;

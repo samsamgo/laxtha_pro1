@@ -44,7 +44,7 @@ const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
 // Raise threshold so 30s@60Hz (1800pts) and 60s@60Hz (3600pts) windows
 // pass through without downsampling — eliminates min/max bucket artifacts
-const MAX_RENDER_POINTS = 3600;
+const MAX_RENDER_POINTS = 12000;
 
 // Quick buttons visible without dropdown
 const QUICK_WINDOWS: ExtWindowSeconds[] = [30, 60, 300];

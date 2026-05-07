@@ -154,12 +154,18 @@ export const parseUartBinaryFrame = (
   }
 
   const wearing = Boolean(frame.pud0 & 0x40); // bit6 = sensor wearing
+  // Sensor not on forehead → discard the entire frame; session stays "running"
+  // so recording auto-resumes the moment the sensor is re-worn (no data gap visible)
+  if (!wearing) return null;
+
   // Electrode status: bit5=CH1, bit4=CH2, bit3=REF (1=connected, 0=off)
   const ch1Ok = (frame.electrodeStatus & 0x28) === 0x28; // CH1 + REF both connected
   const ch2Ok = (frame.electrodeStatus & 0x18) === 0x18; // CH2 + REF both connected
-  // Show 0 when not properly worn or electrode contact is lost — avoids ±591μV ADC rail noise
-  const ch1 = (wearing && ch1Ok) ? (frame.ch1Raw - EEG_CENTER) * EEG_SCALE : 0;
-  const ch2 = (wearing && ch2Ok) ? (frame.ch2Raw - EEG_CENTER) * EEG_SCALE : 0;
+  const toUv = (raw: number) => (raw - EEG_CENTER) * EEG_SCALE;
+  // Clamp: ADC rail faults produce ±591 μV; real EEG is < ±300 μV
+  const safeUv = (v: number) => (Math.abs(v) < 300 ? v : 0);
+  const ch1 = ch1Ok ? safeUv(toUv(frame.ch1Raw)) : 0;
+  const ch2 = ch2Ok ? safeUv(toUv(frame.ch2Raw)) : 0;
   const ppg = (frame.ch4Raw - EEG_CENTER) * EEG_SCALE;
   const sdppg = (frame.ch5Raw - EEG_CENTER) * EEG_SCALE;
   const rrInterval = frame.ch6Raw;

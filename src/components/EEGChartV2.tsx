@@ -45,7 +45,7 @@ const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 const MAX_RENDER_POINTS = 3600;
 
 // Quick buttons visible without dropdown
-const QUICK_WINDOWS: ExtWindowSeconds[] = [10, 30, 60];
+const QUICK_WINDOWS: ExtWindowSeconds[] = [30, 60, 300];
 
 // All options shown inside the "더 보기" dropdown
 const MORE_WINDOWS: { value: ExtWindowSeconds; label: string }[] = [

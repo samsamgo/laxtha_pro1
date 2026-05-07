@@ -220,13 +220,7 @@ const makeOptions = (
     },
     scales: {
       x: { time: true },
-      y: {
-        auto: true,
-        range: (_u, dMin, dMax) => {
-          const span = Math.max(dMax - dMin, 1);
-          return [dMin - span * 0.1, dMax + span * 0.1];
-        },
-      },
+      y: { auto: false },
     },
     axes: [
       {
@@ -312,6 +306,8 @@ function EEGChartV2({
   const visibleRangeRef = useRef<VisibleRange | null>(null);
   const atLiveEdgeRef = useRef(true);
   const isProgrammaticScaleRef = useRef(false);
+  // Smoothly-tracked Y scale bounds — EMA prevents jarring axis jumps
+  const yScaleRef = useRef({ min: -5, max: 5 });
 
   const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
   const [showLiveButton, setShowLiveButton] = useState(false);
@@ -674,9 +670,25 @@ function EEGChartV2({
     const previousXMin = chart.scales.x.min;
     const previousXMax = chart.scales.x.max;
 
-    // false = keep current Y scale; prevents axis from recalculating on every 30Hz frame
     chart.setData(nextData, false);
 
+    // Asymmetric EMA Y scale: expand fast on new peaks, contract slowly afterward.
+    // Eliminates axis "snapping" while always keeping all values visible.
+    {
+      const y1 = nextData[1] as number[];
+      const y2 = nextData[2] as number[];
+      let tMin = 0, tMax = 0; // anchor 0 so baseline is always in range
+      for (const v of y1) if (Number.isFinite(v)) { if (v < tMin) tMin = v; if (v > tMax) tMax = v; }
+      for (const v of y2) if (Number.isFinite(v)) { if (v < tMin) tMin = v; if (v > tMax) tMax = v; }
+      const span = Math.max(tMax - tMin, 1);
+      tMin -= span * 0.12;
+      tMax += span * 0.12;
+      const ys = yScaleRef.current;
+      // Expand immediately when target is outside current range; contract slowly
+      ys.min = tMin < ys.min ? tMin : ys.min + 0.04 * (tMin - ys.min);
+      ys.max = tMax > ys.max ? tMax : ys.max + 0.04 * (tMax - ys.max);
+      chart.setScale("y", { min: ys.min, max: ys.max });
+    }
 
     if (atLiveEdgeRef.current) {
       snapToLive(true);

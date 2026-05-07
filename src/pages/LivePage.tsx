@@ -152,7 +152,7 @@ export default function LivePage() {
   } = useFx2RealtimeSession();
   const { chartTheme } = useFx2Theme();
 
-  const [windowSeconds, setWindowSeconds] = useState<ExtWindowSeconds>(30);
+  const [windowSeconds, setWindowSeconds] = useState<ExtWindowSeconds>(300);
   const [paused, setPaused] = useState(false);
   const [ch1Visible, setCh1Visible] = useState(true);
   const [ch2Visible, setCh2Visible] = useState(true);

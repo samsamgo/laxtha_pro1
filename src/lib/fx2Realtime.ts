@@ -147,7 +147,8 @@ const EEG_SCALE = 0.03606;
 
 export const parseUartBinaryFrame = (
   frame: Fx2BinaryFrame,
-  fallbackState: Fx2State
+  fallbackState: Fx2State,
+  timestamp = Date.now()
 ): Fx2IncomingMessage | null => {
   if (!frame.ppd) {
     return null; // PPD=0: standby/charging mode — discard silently
@@ -157,6 +158,13 @@ export const parseUartBinaryFrame = (
   // Sensor not on forehead → discard the entire frame; session stays "running"
   // so recording auto-resumes the moment the sensor is re-worn (no data gap visible)
   if (!wearing) return null;
+
+  const ch1ElectrodeOk = Boolean(frame.electrodeStatus & 0x20);
+  const ch2ElectrodeOk = Boolean(frame.electrodeStatus & 0x10);
+  const refElectrodeOk = Boolean(frame.electrodeStatus & 0x08);
+  const eegElectrodesOk = ch1ElectrodeOk && ch2ElectrodeOk && refElectrodeOk;
+
+  if (!eegElectrodesOk) return null;
 
   const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
@@ -181,7 +189,7 @@ export const parseUartBinaryFrame = (
     signalQuality,
     connection: "connected",
     noise,
-    timestamp: Date.now(),
+    timestamp,
     ppg,
     sdppg,
     rrInterval,

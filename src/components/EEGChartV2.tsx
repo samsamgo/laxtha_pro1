@@ -30,6 +30,8 @@ interface VisibleRange {
   max: number;
 }
 
+type DisplayValue = number | null;
+
 const CH1_COLOR = "#06B6D4";
 const CH2_COLOR = "#2563EB";
 
@@ -70,67 +72,138 @@ const formatTime = (seconds: number) =>
 const getPointCount = (ch1: number[], ch2: number[], timestamps: number[]) =>
   Math.min(ch1.length, ch2.length, timestamps.length);
 
-// Peak-preserving min/max bucket downsampling — keeps spikes visible
-const downsampleMinMax = (
+// Average bucket downsampling for display. Raw values remain unchanged in state/CSV.
+const downsampleAverage = (
   xs: Float64Array,
-  y1: number[],
-  y2: number[],
+  y1: DisplayValue[],
+  y2: DisplayValue[],
   maxPoints: number
-): [Float64Array, number[], number[]] => {
+): [Float64Array, DisplayValue[], DisplayValue[]] => {
   const n = xs.length;
   if (n <= maxPoints) return [xs, y1, y2];
 
-  const buckets = Math.floor(maxPoints / 2);
-  const bucketSize = n / buckets;
+  const bucketSize = n / maxPoints;
   const outX: number[] = [];
-  const outY1: number[] = [];
-  const outY2: number[] = [];
+  const outY1: DisplayValue[] = [];
+  const outY2: DisplayValue[] = [];
 
-  for (let b = 0; b < buckets; b++) {
+  for (let b = 0; b < maxPoints; b++) {
     const start = Math.floor(b * bucketSize);
     const end = Math.min(Math.floor((b + 1) * bucketSize), n);
     if (start >= end) continue;
 
-    let minY1 = y1[start];
-    let maxY1 = y1[start];
-    let minIdx = start;
-    let maxIdx = start;
+    let sumX = 0;
+    let sumY1 = 0;
+    let countY1 = 0;
+    let sumY2 = 0;
+    let countY2 = 0;
 
-    for (let i = start + 1; i < end; i++) {
-      if (y1[i] < minY1) { minY1 = y1[i]; minIdx = i; }
-      if (y1[i] > maxY1) { maxY1 = y1[i]; maxIdx = i; }
+    for (let i = start; i < end; i++) {
+      sumX += xs[i];
+      const v1 = y1[i];
+      const v2 = y2[i];
+      if (typeof v1 === "number" && Number.isFinite(v1)) {
+        sumY1 += v1;
+        countY1++;
+      }
+      if (typeof v2 === "number" && Number.isFinite(v2)) {
+        sumY2 += v2;
+        countY2++;
+      }
     }
 
-    if (minIdx <= maxIdx) {
-      outX.push(xs[minIdx], xs[maxIdx]);
-      outY1.push(y1[minIdx], y1[maxIdx]);
-      outY2.push(y2[minIdx], y2[maxIdx]);
-    } else {
-      outX.push(xs[maxIdx], xs[minIdx]);
-      outY1.push(y1[maxIdx], y1[minIdx]);
-      outY2.push(y2[maxIdx], y2[minIdx]);
-    }
+    outX.push(sumX / (end - start));
+    outY1.push(countY1 > 0 ? sumY1 / countY1 : null);
+    outY2.push(countY2 > 0 ? sumY2 / countY2 : null);
   }
 
   return [new Float64Array(outX), outY1, outY2];
 };
 
 // Centered moving-average smoothing for display only (raw data in state is untouched)
-const smoothArr = (arr: number[], half: number): number[] => {
+const smoothArr = (arr: DisplayValue[], half: number): DisplayValue[] => {
   const n = arr.length;
-  const out = new Array<number>(n);
+  const out = new Array<DisplayValue>(n);
   for (let i = 0; i < n; i++) {
+    if (arr[i] === null) {
+      out[i] = null;
+      continue;
+    }
+
     const lo = Math.max(0, i - half);
     const hi = Math.min(n - 1, i + half);
     let sum = 0;
-    for (let j = lo; j <= hi; j++) sum += arr[j];
-    out[i] = sum / (hi - lo + 1);
+    let count = 0;
+    for (let j = lo; j <= hi; j++) {
+      const v = arr[j];
+      if (typeof v === "number" && Number.isFinite(v)) {
+        sum += v;
+        count++;
+      }
+    }
+    out[i] = count > 0 ? sum / count : null;
   }
   return out;
 };
 
+const removeDcOffset = (arr: DisplayValue[]): DisplayValue[] => {
+  let sum = 0;
+  let count = 0;
+
+  for (const value of arr) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      sum += value;
+      count++;
+    }
+  }
+
+  if (count === 0) return arr;
+
+  const mean = sum / count;
+  return arr.map((value) =>
+    typeof value === "number" && Number.isFinite(value) ? value - mean : null
+  );
+};
+
+const percentile = (sorted: number[], p: number) => {
+  if (sorted.length === 0) return 0;
+  const index = (sorted.length - 1) * p;
+  const lo = Math.floor(index);
+  const hi = Math.ceil(index);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (index - lo);
+};
+
+const getDisplayYTarget = (data: uPlot.AlignedData) => {
+  const values: number[] = [];
+  const collect = (series: uPlot.AlignedData[number]) => {
+    const items = series as ArrayLike<number | null | undefined>;
+    for (let i = 0; i < items.length; i++) {
+      const value = items[i];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        values.push(value);
+      }
+    }
+  };
+
+  collect(data[1]);
+  collect(data[2]);
+
+  if (values.length === 0) {
+    return { min: -1, max: 1 };
+  }
+
+  values.sort((a, b) => a - b);
+  let min = Math.min(0, percentile(values, 0.01));
+  let max = Math.max(0, percentile(values, 0.99));
+  const span = Math.max(max - min, 1);
+  min -= span * 0.12;
+  max += span * 0.12;
+  return { min, max };
+};
+
 // When the device stops sending (electrode off, PPD=0 run, hardware disconnect),
-// bridge the gap with 0-value points so the timeline stays continuous
+// leave a null gap so outages are not drawn as real 0 uV drops.
 const GAP_THRESHOLD_S = 0.5;
 
 const buildWindowedData = (
@@ -157,8 +230,8 @@ const buildWindowedData = (
   const startIndex = lo;
 
   const xArr: number[] = [];
-  const y1Arr: number[] = [];
-  const y2Arr: number[] = [];
+  const y1Arr: DisplayValue[] = [];
+  const y2Arr: DisplayValue[] = [];
   let lastSecond: number | null = null;
 
   for (let src = startIndex; src < pointCount; src++) {
@@ -166,26 +239,26 @@ const buildWindowedData = (
     const second: number =
       lastSecond === null || rawSecond > lastSecond ? rawSecond : lastSecond + 0.001;
 
-    // Bridge large timestamp gaps with 0 so chart stays at baseline during outages
+    // Bridge large timestamp gaps with null so the line breaks during outages.
     if (lastSecond !== null && second - lastSecond > GAP_THRESHOLD_S) {
       xArr.push(lastSecond + 0.0005);
-      y1Arr.push(0);
-      y2Arr.push(0);
+      y1Arr.push(null);
+      y2Arr.push(null);
     }
 
     xArr.push(second);
     const v1 = ch1[src];
     const v2 = ch2[src];
-    y1Arr.push(v1 !== undefined && Number.isFinite(v1) ? v1 : 0);
-    y2Arr.push(v2 !== undefined && Number.isFinite(v2) ? v2 : 0);
+    y1Arr.push(v1 !== undefined && Number.isFinite(v1) ? v1 : null);
+    y2Arr.push(v2 !== undefined && Number.isFinite(v2) ? v2 : null);
     lastSecond = second;
   }
 
   // Centered 7-point moving average (±3 samples ≈ ±50ms at 60Hz).
   // Applied only for rendering — raw values in state and CSV are unchanged.
-  const smoothed1 = smoothArr(y1Arr, 3);
-  const smoothed2 = smoothArr(y2Arr, 3);
-  const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), smoothed1, smoothed2, MAX_RENDER_POINTS);
+  const smoothed1 = smoothArr(removeDcOffset(y1Arr), 3);
+  const smoothed2 = smoothArr(removeDcOffset(y2Arr), 3);
+  const [dsX, dsY1, dsY2] = downsampleAverage(new Float64Array(xArr), smoothed1, smoothed2, MAX_RENDER_POINTS);
   return [dsX, dsY1, dsY2];
 };
 
@@ -253,7 +326,7 @@ const makeOptions = (
         stroke: CH1_COLOR,
         width: 2,
         points: { show: false },
-        value: (_chart, v) => v.toFixed(2),
+        value: (_chart, v) => (v == null ? "--" : v.toFixed(2)),
       },
       {
         label: "CH2",
@@ -262,7 +335,7 @@ const makeOptions = (
         stroke: CH2_COLOR,
         width: 2,
         points: { show: false },
-        value: (_chart, v) => v.toFixed(2),
+        value: (_chart, v) => (v == null ? "--" : v.toFixed(2)),
       },
     ],
     hooks: {
@@ -675,14 +748,7 @@ function EEGChartV2({
     // Asymmetric EMA Y scale: expand fast on new peaks, contract slowly afterward.
     // Eliminates axis "snapping" while always keeping all values visible.
     {
-      const y1 = nextData[1] as number[];
-      const y2 = nextData[2] as number[];
-      let tMin = 0, tMax = 0; // anchor 0 so baseline is always in range
-      for (const v of y1) if (Number.isFinite(v)) { if (v < tMin) tMin = v; if (v > tMax) tMax = v; }
-      for (const v of y2) if (Number.isFinite(v)) { if (v < tMin) tMin = v; if (v > tMax) tMax = v; }
-      const span = Math.max(tMax - tMin, 1);
-      tMin -= span * 0.12;
-      tMax += span * 0.12;
+      const { min: tMin, max: tMax } = getDisplayYTarget(nextData);
       const ys = yScaleRef.current;
       // Expand immediately when target is outside current range; contract slowly
       ys.min = tMin < ys.min ? tMin : ys.min + 0.04 * (tMin - ys.min);

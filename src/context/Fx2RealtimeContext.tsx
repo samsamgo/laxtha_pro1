@@ -20,9 +20,18 @@ import {
   type Fx2HardwareStatus,
 } from "../services/fx2Hardware";
 import type { EegSample, EegSessionSummary } from "../types/eegRecorder";
-import type { DeviceMode, Fx2IncomingMessage, Fx2State } from "../types/fx2";
+import type { DeviceMode, Fx2BinaryFrame, Fx2IncomingMessage, Fx2State } from "../types/fx2";
 
 type SessionPhase = "idle" | "running" | "stopped";
+
+const HARDWARE_SAMPLE_RATE_HZ = 60;
+const HARDWARE_SAMPLE_INTERVAL_MS = 1000 / HARDWARE_SAMPLE_RATE_HZ;
+const UART_PC_MODULO = 32;
+
+interface HardwareSampleClock {
+  lastPc: number | null;
+  lastTimestamp: number | null;
+}
 
 interface Fx2RealtimeContextValue {
   state: Fx2State;
@@ -58,6 +67,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const renderTickRef = useRef<number | null>(null);
   const sessionActiveRef = useRef(false);
   const sessionPhaseRef = useRef<SessionPhase>("idle");
+  const hardwareSampleClockRef = useRef<HardwareSampleClock>({
+    lastPc: null,
+    lastTimestamp: null,
+  });
   const [recorderSummary, setRecorderSummary] = useState<EegSessionSummary>(
     () => recorderRef.current.getSummary()
   );
@@ -69,6 +82,36 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     sessionPhaseRef.current = sessionPhase;
   }, [sessionPhase]);
+
+  const resetHardwareSampleClock = () => {
+    hardwareSampleClockRef.current = {
+      lastPc: null,
+      lastTimestamp: null,
+    };
+  };
+
+  const nextHardwareTimestamp = (frame: Fx2BinaryFrame) => {
+    const now = Date.now();
+    const clock = hardwareSampleClockRef.current;
+
+    if (clock.lastTimestamp === null || clock.lastPc === null) {
+      clock.lastPc = frame.pc;
+      clock.lastTimestamp = now;
+      return now;
+    }
+
+    const pcDelta = (frame.pc - clock.lastPc + UART_PC_MODULO) % UART_PC_MODULO;
+    const sampleSteps = pcDelta > 0 ? pcDelta : 1;
+    let nextTimestamp = clock.lastTimestamp + sampleSteps * HARDWARE_SAMPLE_INTERVAL_MS;
+
+    if (Math.abs(now - nextTimestamp) > 1000) {
+      nextTimestamp = now;
+    }
+
+    clock.lastPc = frame.pc;
+    clock.lastTimestamp = nextTimestamp;
+    return nextTimestamp;
+  };
 
   useEffect(() => {
     const hardware = hardwareRef.current;
@@ -87,6 +130,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         // Hardware physically disconnected during session — stop recording
         if (event.status === "idle" && sessionPhaseRef.current === "running") {
           sessionActiveRef.current = false;
+          resetHardwareSampleClock();
           setSessionPhase("stopped");
           setState((prev) => ({
             ...prev,
@@ -99,7 +143,8 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
       if (!sessionActiveRef.current) return;
 
-      const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current);
+      const timestamp = nextHardwareTimestamp(event.frame);
+      const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current, timestamp);
       if (!nextMessage) return;
 
       // Buffer frames; a 30Hz interval drains and applies them to avoid
@@ -152,6 +197,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const disconnectDevice = () => {
     sessionActiveRef.current = false;
     pendingHardwareRef.current = [];
+    resetHardwareSampleClock();
     if (sessionPhaseRef.current === "running") {
       recorderRef.current.stopRecording();
       stopRecTick();
@@ -169,6 +215,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   // Start recording — hardware must already be connected.
   const startSession = () => {
     sessionActiveRef.current = true;
+    resetHardwareSampleClock();
     setState(createInitialFx2State("serial"));
     setSessionPhase("running");
     recorderRef.current.startRecording("serial");
@@ -179,6 +226,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   // Stop recording — keeps hardware connected for smooth restart.
   const stopSession = () => {
     sessionActiveRef.current = false;
+    resetHardwareSampleClock();
     setSessionPhase("stopped");
     setState((prev) => ({
       ...prev,

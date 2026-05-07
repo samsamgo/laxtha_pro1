@@ -153,8 +153,12 @@ export const parseUartBinaryFrame = (
     return null; // PPD=0: standby/charging mode — discard silently
   }
 
-  const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
-  const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
+  // Electrode status: bit5=CH1, bit4=CH2, bit3=REF (1=connected, 0=off)
+  // When an electrode or REF is disconnected the ADC floats → rail values → ±591 μV garbage
+  const ch1Ok = (frame.electrodeStatus & 0x28) === 0x28; // bit5 (CH1) + bit3 (REF) both connected
+  const ch2Ok = (frame.electrodeStatus & 0x18) === 0x18; // bit4 (CH2) + bit3 (REF) both connected
+  const ch1 = ch1Ok ? (frame.ch1Raw - EEG_CENTER) * EEG_SCALE : NaN;
+  const ch2 = ch2Ok ? (frame.ch2Raw - EEG_CENTER) * EEG_SCALE : NaN;
   const ppg = (frame.ch4Raw - EEG_CENTER) * EEG_SCALE;
   const sdppg = (frame.ch5Raw - EEG_CENTER) * EEG_SCALE;
   const rrInterval = frame.ch6Raw;
@@ -279,10 +283,10 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
         prev.stats.unstableMoments + (wearStatus === "unstable" ? 1 : 0),
       notWornMoments:
         prev.stats.notWornMoments + (wearStatus === "not_worn" ? 1 : 0),
-      ch1Sum: prev.stats.ch1Sum + message.ch1,
-      ch2Sum: prev.stats.ch2Sum + message.ch2,
-      ch1PeakAbs: Math.max(prev.stats.ch1PeakAbs, Math.abs(message.ch1)),
-      ch2PeakAbs: Math.max(prev.stats.ch2PeakAbs, Math.abs(message.ch2)),
+      ch1Sum: prev.stats.ch1Sum + (Number.isFinite(message.ch1) ? message.ch1 : 0),
+      ch2Sum: prev.stats.ch2Sum + (Number.isFinite(message.ch2) ? message.ch2 : 0),
+      ch1PeakAbs: Number.isFinite(message.ch1) ? Math.max(prev.stats.ch1PeakAbs, Math.abs(message.ch1)) : prev.stats.ch1PeakAbs,
+      ch2PeakAbs: Number.isFinite(message.ch2) ? Math.max(prev.stats.ch2PeakAbs, Math.abs(message.ch2)) : prev.stats.ch2PeakAbs,
     },
   };
 };

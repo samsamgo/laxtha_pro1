@@ -157,6 +157,7 @@ export default function LivePage() {
   const [ch1Visible, setCh1Visible] = useState(true);
   const [ch2Visible, setCh2Visible] = useState(true);
   const [showCharts, setShowCharts] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
   const logContainerRef = useRef<HTMLUListElement | null>(null);
   const logPinnedRef = useRef(true);
@@ -358,10 +359,11 @@ export default function LivePage() {
               ) : isRunning ? (
                 <button
                   type="button"
-                  onClick={stopSession}
-                  className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
+                  disabled={isStopping}
+                  onClick={() => { setIsStopping(true); stopSession(); setTimeout(() => setIsStopping(false), 600); }}
+                  className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white"
                 >
-                  측정 종료
+                  {isStopping ? "종료 중…" : "측정 종료"}
                 </button>
               ) : null}
 
@@ -410,9 +412,9 @@ export default function LivePage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={exportCsv} className="rounded-full bg-green-50 px-4 py-2 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-600 hover:text-white dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-600 dark:hover:text-white">CSV 저장</button>
-                <button type="button" onClick={exportJson} className="rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 transition-colors duration-200 hover:bg-[#2563EB] hover:text-white dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-[#2563EB] dark:hover:text-white">JSON 저장</button>
-                <button type="button" onClick={clearRecording} className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">기록 초기화</button>
+                <button type="button" onClick={exportCsv} disabled={recorderSummary.isRecording} className="rounded-full bg-green-50 px-4 py-2 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-600 dark:hover:text-white">CSV 저장</button>
+                <button type="button" onClick={exportJson} disabled={recorderSummary.isRecording} className="rounded-full bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 transition-colors duration-200 hover:bg-[#2563EB] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-[#2563EB] dark:hover:text-white">JSON 저장</button>
+                <button type="button" onClick={clearRecording} disabled={recorderSummary.isRecording} className="rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] transition-colors duration-200 hover:bg-[#111827] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">기록 초기화</button>
               </div>
             </div>
           </section>

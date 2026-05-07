@@ -1,6 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
+import {
+  EEG_FILTER_PRESETS,
+  applyEegFilterPreset,
+  type EegFilterPreset,
+} from "../lib/eegFilters";
 import type { ExtWindowSeconds } from "../types/eegRecorder";
 
 export interface EEGChartV2Props {
@@ -123,7 +128,8 @@ const buildWindowedData = (
   ch1: number[],
   ch2: number[],
   timestamps: number[],
-  windowSeconds: ExtWindowSeconds
+  windowSeconds: ExtWindowSeconds,
+  filterPreset: EegFilterPreset
 ): uPlot.AlignedData => {
   const pointCount = getPointCount(ch1, ch2, timestamps);
 
@@ -167,7 +173,14 @@ const buildWindowedData = (
     lastSecond = second;
   }
 
-  const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), y1Arr, y2Arr, MAX_RENDER_POINTS);
+  const filteredY1 = applyEegFilterPreset(y1Arr, xArr, filterPreset);
+  const filteredY2 = applyEegFilterPreset(y2Arr, xArr, filterPreset);
+  const [dsX, dsY1, dsY2] = downsampleMinMax(
+    new Float64Array(xArr),
+    filteredY1,
+    filteredY2,
+    MAX_RENDER_POINTS
+  );
   return [dsX, dsY1, dsY2];
 };
 
@@ -272,9 +285,11 @@ function EEGChartV2({
   onCh1Toggle,
   onCh2Toggle,
 }: EEGChartV2Props) {
+  const [filterPreset, setFilterPreset] = useState<EegFilterPreset>("eeg");
+
   const chartData = useMemo(
-    () => buildWindowedData(ch1, ch2, timestamps, windowSeconds),
-    [ch1, ch2, timestamps, windowSeconds]
+    () => buildWindowedData(ch1, ch2, timestamps, windowSeconds, filterPreset),
+    [ch1, ch2, timestamps, windowSeconds, filterPreset]
   );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -300,8 +315,10 @@ function EEGChartV2({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  const latestCh1 = ch1[ch1.length - 1];
-  const latestCh2 = ch2[ch2.length - 1];
+  const renderedCh1 = chartData[1] as number[];
+  const renderedCh2 = chartData[2] as number[];
+  const latestCh1 = renderedCh1[renderedCh1.length - 1];
+  const latestCh2 = renderedCh2[renderedCh2.length - 1];
   const isExtendedWindow = windowSeconds === 120 || windowSeconds === 300;
 
   const secondaryButtonClass =
@@ -692,6 +709,12 @@ function EEGChartV2({
     snapToLive(true);
   }, [snapToLive, windowSeconds]);
 
+  useEffect(() => {
+    lastYScaleRef.current = 0;
+    yBoundsRef.current = [-5, 5];
+    chartRef.current?.setScale("y", { min: -5, max: 5 });
+  }, [filterPreset]);
+
   const handleWindowSelect = useCallback(
     (value: ExtWindowSeconds) => {
       onWindowChange(value);
@@ -771,6 +794,25 @@ function EEGChartV2({
 
             {/* Chart controls */}
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1">
+                {EEG_FILTER_PRESETS.map(({ value, label, title }) => {
+                  const isActive = filterPreset === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      title={title}
+                      onClick={() => setFilterPreset(value)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                        isActive ? "bg-emerald-500 text-white" : secondaryButtonClass
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <button
                 type="button"
                 onClick={onPauseToggle}

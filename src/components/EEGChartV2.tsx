@@ -40,8 +40,9 @@ const THEME_COLORS: Record<ChartTheme, { background: string; grid: string; text:
 
 const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
-// Max points to render — keeps chart smooth even for long windows
-const MAX_RENDER_POINTS = 600;
+// Raise threshold so 30s@60Hz (1800pts) and 60s@60Hz (3600pts) windows
+// pass through without downsampling — eliminates min/max bucket artifacts
+const MAX_RENDER_POINTS = 3600;
 
 // Quick buttons visible without dropdown
 const QUICK_WINDOWS: ExtWindowSeconds[] = [10, 30, 60];
@@ -190,7 +191,16 @@ const makeOptions = (
     },
     scales: {
       x: { time: true },
-      y: { auto: true },
+      y: {
+        auto: true,
+        // Enforce minimum ±2μV span so a flat/near-flat signal
+        // doesn't over-zoom, and add 20% padding above/below
+        range: (_u, dataMin, dataMax) => {
+          const center = (dataMin + dataMax) / 2;
+          const halfSpan = Math.max((dataMax - dataMin) / 2, 2);
+          return [center - halfSpan * 1.2, center + halfSpan * 1.2];
+        },
+      },
     },
     axes: [
       {
@@ -638,7 +648,9 @@ function EEGChartV2({
     const previousXMin = chart.scales.x.min;
     const previousXMax = chart.scales.x.max;
 
-    chart.setData(nextData, true);
+    // false = keep current Y scale unless data is out of range;
+    // prevents axis from recalculating and jumping on every 30Hz frame
+    chart.setData(nextData, false);
 
     if (atLiveEdgeRef.current) {
       snapToLive(true);

@@ -220,7 +220,13 @@ const makeOptions = (
     },
     scales: {
       x: { time: true },
-      y: { auto: false },
+      y: {
+        auto: true,
+        range: (_u, dMin, dMax) => {
+          const span = Math.max(dMax - dMin, 1);
+          return [dMin - span * 0.1, dMax + span * 0.1];
+        },
+      },
     },
     axes: [
       {
@@ -306,8 +312,6 @@ function EEGChartV2({
   const visibleRangeRef = useRef<VisibleRange | null>(null);
   const atLiveEdgeRef = useRef(true);
   const isProgrammaticScaleRef = useRef(false);
-  const lastYScaleRef = useRef(0);
-  const yBoundsRef = useRef<[number, number]>([-5, 5]);
 
   const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
   const [showLiveButton, setShowLiveButton] = useState(false);
@@ -673,25 +677,6 @@ function EEGChartV2({
     // false = keep current Y scale; prevents axis from recalculating on every 30Hz frame
     chart.setData(nextData, false);
 
-    // Recalculate Y bounds at most once every 2 seconds.
-    // Only commit when the new amplitude differs >25% from current — suppresses
-    // normal EEG fluctuation jitter while still tracking large amplitude shifts.
-    const now = performance.now();
-    if (now - lastYScaleRef.current > 2000) {
-      const y1 = nextData[1] as number[];
-      const y2 = nextData[2] as number[];
-      let maxAbs = 2;
-      // Skip 0-padded gap samples (value exactly 0) so they don't shrink the range
-      for (const v of y1) if (v !== 0 && Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
-      for (const v of y2) if (v !== 0 && Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
-      const newAmp = maxAbs * 1.2;
-      const prevAmp = yBoundsRef.current[1];
-      lastYScaleRef.current = now;
-      if (Math.abs(newAmp - prevAmp) / prevAmp > 0.25) {
-        yBoundsRef.current = [-newAmp, newAmp];
-        chart.setScale("y", { min: -newAmp, max: newAmp });
-      }
-    }
 
     if (atLiveEdgeRef.current) {
       snapToLive(true);

@@ -367,15 +367,6 @@ export default function LivePage() {
                 </button>
               ) : null}
 
-              {/* REC indicator */}
-              {isRunning && recorderSummary.isRecording ? (
-                <div className="flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 dark:bg-red-500/10">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                  <span className="text-xs font-semibold text-red-600 dark:text-red-300">기록 중</span>
-                  <span className="text-xs text-red-500 dark:text-red-400">{formatMs(recorderSummary.durationMs)}</span>
-                  <span className="text-xs text-red-400 dark:text-red-500">{recorderSummary.sampleCount.toLocaleString()}샘플</span>
-                </div>
-              ) : null}
             </div>
           </div>
 

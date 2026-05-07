@@ -72,8 +72,9 @@ const formatTime = (seconds: number) =>
 const getPointCount = (ch1: number[], ch2: number[], timestamps: number[]) =>
   Math.min(ch1.length, ch2.length, timestamps.length);
 
-// Average bucket downsampling for display. Raw values remain unchanged in state/CSV.
-const downsampleAverage = (
+// Measurement-safe min/max bucket downsampling. It keeps actual sampled values
+// and uses straight line segments only; no spline or smoothing is applied.
+const downsampleMinMax = (
   xs: Float64Array,
   y1: DisplayValue[],
   y2: DisplayValue[],
@@ -82,96 +83,52 @@ const downsampleAverage = (
   const n = xs.length;
   if (n <= maxPoints) return [xs, y1, y2];
 
-  const bucketSize = n / maxPoints;
+  const buckets = Math.max(1, Math.floor(maxPoints / 2));
+  const bucketSize = n / buckets;
   const outX: number[] = [];
   const outY1: DisplayValue[] = [];
   const outY2: DisplayValue[] = [];
 
-  for (let b = 0; b < maxPoints; b++) {
+  for (let b = 0; b < buckets; b++) {
     const start = Math.floor(b * bucketSize);
     const end = Math.min(Math.floor((b + 1) * bucketSize), n);
     if (start >= end) continue;
 
-    let sumX = 0;
-    let sumY1 = 0;
-    let countY1 = 0;
-    let sumY2 = 0;
-    let countY2 = 0;
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    let minIndex = start;
+    let maxIndex = start;
 
     for (let i = start; i < end; i++) {
-      sumX += xs[i];
-      const v1 = y1[i];
-      const v2 = y2[i];
-      if (typeof v1 === "number" && Number.isFinite(v1)) {
-        sumY1 += v1;
-        countY1++;
-      }
-      if (typeof v2 === "number" && Number.isFinite(v2)) {
-        sumY2 += v2;
-        countY2++;
+      for (const value of [y1[i], y2[i]]) {
+        if (typeof value !== "number" || !Number.isFinite(value)) continue;
+        if (value < minValue) {
+          minValue = value;
+          minIndex = i;
+        }
+        if (value > maxValue) {
+          maxValue = value;
+          maxIndex = i;
+        }
       }
     }
 
-    outX.push(sumX / (end - start));
-    outY1.push(countY1 > 0 ? sumY1 / countY1 : null);
-    outY2.push(countY2 > 0 ? sumY2 / countY2 : null);
-  }
-
-  return [new Float64Array(outX), outY1, outY2];
-};
-
-// Centered moving-average smoothing for display only (raw data in state is untouched)
-const smoothArr = (arr: DisplayValue[], half: number): DisplayValue[] => {
-  const n = arr.length;
-  const out = new Array<DisplayValue>(n);
-  for (let i = 0; i < n; i++) {
-    if (arr[i] === null) {
-      out[i] = null;
+    if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+      outX.push(xs[start]);
+      outY1.push(null);
+      outY2.push(null);
       continue;
     }
 
-    const lo = Math.max(0, i - half);
-    const hi = Math.min(n - 1, i + half);
-    let sum = 0;
-    let count = 0;
-    for (let j = lo; j <= hi; j++) {
-      const v = arr[j];
-      if (typeof v === "number" && Number.isFinite(v)) {
-        sum += v;
-        count++;
-      }
-    }
-    out[i] = count > 0 ? sum / count : null;
-  }
-  return out;
-};
-
-const removeDcOffset = (arr: DisplayValue[]): DisplayValue[] => {
-  let sum = 0;
-  let count = 0;
-
-  for (const value of arr) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      sum += value;
-      count++;
+    const indices = minIndex <= maxIndex ? [minIndex, maxIndex] : [maxIndex, minIndex];
+    for (const index of indices) {
+      outX.push(xs[index]);
+      outY1.push(y1[index]);
+      outY2.push(y2[index]);
     }
   }
 
-  if (count === 0) return arr;
-
-  const mean = sum / count;
-  return arr.map((value) =>
-    typeof value === "number" && Number.isFinite(value) ? value - mean : null
-  );
-};
-
-const percentile = (sorted: number[], p: number) => {
-  if (sorted.length === 0) return 0;
-  const index = (sorted.length - 1) * p;
-  const lo = Math.floor(index);
-  const hi = Math.ceil(index);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (index - lo);
+  return [new Float64Array(outX), outY1, outY2];
 };
 
 const getDisplayYTarget = (data: uPlot.AlignedData) => {
@@ -193,9 +150,8 @@ const getDisplayYTarget = (data: uPlot.AlignedData) => {
     return { min: -1, max: 1 };
   }
 
-  values.sort((a, b) => a - b);
-  let min = Math.min(0, percentile(values, 0.01));
-  let max = Math.max(0, percentile(values, 0.99));
+  let min = Math.min(0, ...values);
+  let max = Math.max(0, ...values);
   const span = Math.max(max - min, 1);
   min -= span * 0.12;
   max += span * 0.12;
@@ -254,11 +210,7 @@ const buildWindowedData = (
     lastSecond = second;
   }
 
-  // Centered 7-point moving average (±3 samples ≈ ±50ms at 60Hz).
-  // Applied only for rendering — raw values in state and CSV are unchanged.
-  const smoothed1 = smoothArr(removeDcOffset(y1Arr), 3);
-  const smoothed2 = smoothArr(removeDcOffset(y2Arr), 3);
-  const [dsX, dsY1, dsY2] = downsampleAverage(new Float64Array(xArr), smoothed1, smoothed2, MAX_RENDER_POINTS);
+  const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), y1Arr, y2Arr, MAX_RENDER_POINTS);
   return [dsX, dsY1, dsY2];
 };
 

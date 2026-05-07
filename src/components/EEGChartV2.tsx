@@ -70,46 +70,35 @@ const formatTime = (seconds: number) =>
 const getPointCount = (ch1: number[], ch2: number[], timestamps: number[]) =>
   Math.min(ch1.length, ch2.length, timestamps.length);
 
-type NullableNumberArray = (number | null)[];
-
-// Peak-preserving min/max bucket downsampling — null values (gap markers) are preserved
+// Peak-preserving min/max bucket downsampling — keeps spikes visible
 const downsampleMinMax = (
   xs: Float64Array,
-  y1: NullableNumberArray,
-  y2: NullableNumberArray,
+  y1: number[],
+  y2: number[],
   maxPoints: number
-): [Float64Array, NullableNumberArray, NullableNumberArray] => {
+): [Float64Array, number[], number[]] => {
   const n = xs.length;
   if (n <= maxPoints) return [xs, y1, y2];
 
   const buckets = Math.floor(maxPoints / 2);
   const bucketSize = n / buckets;
   const outX: number[] = [];
-  const outY1: NullableNumberArray = [];
-  const outY2: NullableNumberArray = [];
+  const outY1: number[] = [];
+  const outY2: number[] = [];
 
   for (let b = 0; b < buckets; b++) {
     const start = Math.floor(b * bucketSize);
     const end = Math.min(Math.floor((b + 1) * bucketSize), n);
     if (start >= end) continue;
 
-    let minY1: number | null = null;
-    let maxY1: number | null = null;
+    let minY1 = y1[start];
+    let maxY1 = y1[start];
     let minIdx = start;
     let maxIdx = start;
 
-    for (let i = start; i < end; i++) {
-      const v = y1[i];
-      if (v === null || !Number.isFinite(v)) continue;
-      if (minY1 === null || v < minY1) { minY1 = v; minIdx = i; }
-      if (maxY1 === null || v > maxY1) { maxY1 = v; maxIdx = i; }
-    }
-
-    if (minY1 === null) {
-      outX.push(xs[Math.floor((start + end) / 2)]);
-      outY1.push(null);
-      outY2.push(null);
-      continue;
+    for (let i = start + 1; i < end; i++) {
+      if (y1[i] < minY1) { minY1 = y1[i]; minIdx = i; }
+      if (y1[i] > maxY1) { maxY1 = y1[i]; maxIdx = i; }
     }
 
     if (minIdx <= maxIdx) {
@@ -126,8 +115,8 @@ const downsampleMinMax = (
   return [new Float64Array(outX), outY1, outY2];
 };
 
-// Gap threshold: if consecutive timestamps jump > 500ms, the device stopped sending
-// (electrode off, PPD=0 frames dropped, etc.) — insert a null to break the line
+// When the device stops sending (electrode off, PPD=0 run, hardware disconnect),
+// bridge the gap with 0-value points so the timeline stays continuous
 const GAP_THRESHOLD_S = 0.5;
 
 const buildWindowedData = (
@@ -154,8 +143,8 @@ const buildWindowedData = (
   const startIndex = lo;
 
   const xArr: number[] = [];
-  const y1Arr: NullableNumberArray = [];
-  const y2Arr: NullableNumberArray = [];
+  const y1Arr: number[] = [];
+  const y2Arr: number[] = [];
   let lastSecond: number | null = null;
 
   for (let src = startIndex; src < pointCount; src++) {
@@ -163,24 +152,23 @@ const buildWindowedData = (
     const second: number =
       lastSecond === null || rawSecond > lastSecond ? rawSecond : lastSecond + 0.001;
 
-    // Insert a null break for large time gaps (electrode outage, PPD=0 run, reconnect)
+    // Bridge large timestamp gaps with 0 so chart stays at baseline during outages
     if (lastSecond !== null && second - lastSecond > GAP_THRESHOLD_S) {
       xArr.push(lastSecond + 0.0005);
-      y1Arr.push(null);
-      y2Arr.push(null);
+      y1Arr.push(0);
+      y2Arr.push(0);
     }
 
     xArr.push(second);
     const v1 = ch1[src];
     const v2 = ch2[src];
-    y1Arr.push(v1 !== undefined && Number.isFinite(v1) ? v1 : null);
-    y2Arr.push(v2 !== undefined && Number.isFinite(v2) ? v2 : null);
+    y1Arr.push(v1 !== undefined && Number.isFinite(v1) ? v1 : 0);
+    y2Arr.push(v2 !== undefined && Number.isFinite(v2) ? v2 : 0);
     lastSecond = second;
   }
 
   const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), y1Arr, y2Arr, MAX_RENDER_POINTS);
-  // uPlot accepts null[] for gap segments; cast needed because TS types say number[]
-  return [dsX, dsY1, dsY2] as unknown as uPlot.AlignedData;
+  return [dsX, dsY1, dsY2];
 };
 
 const getLatestSecond = (data: uPlot.AlignedData) => {
@@ -667,22 +655,21 @@ function EEGChartV2({
     // false = keep current Y scale; prevents axis from recalculating on every 30Hz frame
     chart.setData(nextData, false);
 
-    // Recalculate Y bounds at most once per second to freeze already-plotted values in place.
-    // Only commit a new range when it differs by >15% from current — suppresses minor
-    // EEG amplitude fluctuations that would otherwise make the axis jitter visibly.
+    // Recalculate Y bounds at most once every 2 seconds.
+    // Only commit when the new amplitude differs >25% from current — suppresses
+    // normal EEG fluctuation jitter while still tracking large amplitude shifts.
     const now = performance.now();
-    if (now - lastYScaleRef.current > 1000) {
-      const y1 = nextData[1] as (number | null)[];
-      const y2 = nextData[2] as (number | null)[];
+    if (now - lastYScaleRef.current > 2000) {
+      const y1 = nextData[1] as number[];
+      const y2 = nextData[2] as number[];
       let maxAbs = 2;
-      for (const v of y1) if (v !== null && Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
-      for (const v of y2) if (v !== null && Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
+      // Skip 0-padded gap samples (value exactly 0) so they don't shrink the range
+      for (const v of y1) if (v !== 0 && Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
+      for (const v of y2) if (v !== 0 && Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
       const newAmp = maxAbs * 1.2;
-      const prevAmp = yBoundsRef.current[1]; // positive half
+      const prevAmp = yBoundsRef.current[1];
       lastYScaleRef.current = now;
-      // Only rescale if the new amplitude differs by more than 15% — avoids jitter from
-      // small EEG signal fluctuations triggering visible axis jumps every second
-      if (Math.abs(newAmp - prevAmp) / prevAmp > 0.15) {
+      if (Math.abs(newAmp - prevAmp) / prevAmp > 0.25) {
         yBoundsRef.current = [-newAmp, newAmp];
         chart.setScale("y", { min: -newAmp, max: newAmp });
       }

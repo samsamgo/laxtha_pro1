@@ -191,16 +191,7 @@ const makeOptions = (
     },
     scales: {
       x: { time: true },
-      y: {
-        auto: true,
-        // Enforce minimum ±2μV span so a flat/near-flat signal
-        // doesn't over-zoom, and add 20% padding above/below
-        range: (_u, dataMin, dataMax) => {
-          const center = (dataMin + dataMax) / 2;
-          const halfSpan = Math.max((dataMax - dataMin) / 2, 2);
-          return [center - halfSpan * 1.2, center + halfSpan * 1.2];
-        },
-      },
+      y: { auto: false },
     },
     axes: [
       {
@@ -286,6 +277,8 @@ function EEGChartV2({
   const visibleRangeRef = useRef<VisibleRange | null>(null);
   const atLiveEdgeRef = useRef(true);
   const isProgrammaticScaleRef = useRef(false);
+  const lastYScaleRef = useRef(0);
+  const yBoundsRef = useRef<[number, number]>([-5, 5]);
 
   const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
   const [showLiveButton, setShowLiveButton] = useState(false);
@@ -648,9 +641,22 @@ function EEGChartV2({
     const previousXMin = chart.scales.x.min;
     const previousXMax = chart.scales.x.max;
 
-    // false = keep current Y scale unless data is out of range;
-    // prevents axis from recalculating and jumping on every 30Hz frame
+    // false = keep current Y scale; prevents axis from recalculating on every 30Hz frame
     chart.setData(nextData, false);
+
+    // Recalculate Y bounds at most once per second to freeze already-plotted values in place
+    const now = performance.now();
+    if (now - lastYScaleRef.current > 1000) {
+      const y1 = nextData[1] as number[];
+      const y2 = nextData[2] as number[];
+      let maxAbs = 2;
+      for (const v of y1) if (Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
+      for (const v of y2) if (Number.isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v));
+      const amp = maxAbs * 1.2;
+      yBoundsRef.current = [-amp, amp];
+      lastYScaleRef.current = now;
+      chart.setScale("y", { min: -amp, max: amp });
+    }
 
     if (atLiveEdgeRef.current) {
       snapToLive(true);

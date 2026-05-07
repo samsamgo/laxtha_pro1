@@ -115,6 +115,20 @@ const downsampleMinMax = (
   return [new Float64Array(outX), outY1, outY2];
 };
 
+// Centered moving-average smoothing for display only (raw data in state is untouched)
+const smoothArr = (arr: number[], half: number): number[] => {
+  const n = arr.length;
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i - half);
+    const hi = Math.min(n - 1, i + half);
+    let sum = 0;
+    for (let j = lo; j <= hi; j++) sum += arr[j];
+    out[i] = sum / (hi - lo + 1);
+  }
+  return out;
+};
+
 // When the device stops sending (electrode off, PPD=0 run, hardware disconnect),
 // bridge the gap with 0-value points so the timeline stays continuous
 const GAP_THRESHOLD_S = 0.5;
@@ -167,7 +181,11 @@ const buildWindowedData = (
     lastSecond = second;
   }
 
-  const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), y1Arr, y2Arr, MAX_RENDER_POINTS);
+  // Centered 7-point moving average (±3 samples ≈ ±50ms at 60Hz).
+  // Applied only for rendering — raw values in state and CSV are unchanged.
+  const smoothed1 = smoothArr(y1Arr, 3);
+  const smoothed2 = smoothArr(y2Arr, 3);
+  const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), smoothed1, smoothed2, MAX_RENDER_POINTS);
   return [dsX, dsY1, dsY2];
 };
 

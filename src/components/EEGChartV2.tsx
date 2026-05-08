@@ -42,9 +42,11 @@ const THEME_COLORS: Record<ChartTheme, { background: string; grid: string; text:
 
 const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
-// Raise threshold so 30s@60Hz (1800pts) and 60s@60Hz (3600pts) windows
+// Keep the full 5-minute hardware window at 60Hz before downsampling.
 // pass through without downsampling — eliminates min/max bucket artifacts
-const MAX_RENDER_POINTS = 12000;
+const MAX_RENDER_POINTS = 18000;
+const MIN_Y_RANGE_UV = 1600;
+const Y_RANGE_PADDING = 0.2;
 
 // Quick buttons visible without dropdown
 const QUICK_WINDOWS: ExtWindowSeconds[] = [30, 60, 300];
@@ -147,14 +149,14 @@ const getDisplayYTarget = (data: uPlot.AlignedData) => {
   collect(data[2]);
 
   if (values.length === 0) {
-    return { min: -1, max: 1 };
+    return { min: -MIN_Y_RANGE_UV / 2, max: MIN_Y_RANGE_UV / 2 };
   }
 
   let min = Math.min(0, ...values);
   let max = Math.max(0, ...values);
   const span = Math.max(max - min, 1);
-  min -= span * 0.12;
-  max += span * 0.12;
+  min = Math.min(min - span * Y_RANGE_PADDING, -MIN_Y_RANGE_UV / 2);
+  max = Math.max(max + span * Y_RANGE_PADDING, MIN_Y_RANGE_UV / 2);
   return { min, max };
 };
 

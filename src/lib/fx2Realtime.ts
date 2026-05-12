@@ -82,6 +82,7 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     ch1: [],
     ch2: [],
     timestamps: [],
+    pc: [],
     ppg: [],
     sdppg: [],
     rrInterval: [],
@@ -91,6 +92,7 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     sessionSeconds: 0,
     sessionStartedAt: startedAt,
     lastUpdated: startedAt,
+    electrodeStatus: null,
     logs: ["세션이 준비됐습니다. 측정을 시작하면 실시간 데이터가 누적됩니다."],
     stats: createEmptyStats(),
   };
@@ -108,6 +110,8 @@ export const buildMessageFromState = (
   signalQuality: patch.signalQuality ?? state.signalQuality,
   connection: patch.connection ?? (state.connected ? "connected" : "disconnected"),
   noise: patch.noise ?? state.noise,
+  pc: patch.pc ?? state.pc[state.pc.length - 1] ?? 0,
+  electrodeStatus: patch.electrodeStatus ?? state.electrodeStatus ?? undefined,
   timestamp: patch.timestamp ?? Date.now(),
 });
 
@@ -135,10 +139,12 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
     connection: "connected",
     noise,
     timestamp,
+    pc: sampleIndex % 32,
     ppg: Math.sin(drift * 1.1) * 0.5 + (Math.random() - 0.5) * 0.1,
     sdppg: Math.cos(drift * 1.3) * 0.3 + (Math.random() - 0.5) * 0.05,
     rrInterval: bpm > 0 ? Math.round(60000 / bpm) : 833,
     powerSpectrum: Math.abs(Math.sin(drift * 0.05)) * 80 + 100 + Math.random() * 5,
+    electrodeStatus: wearing ? 0x38 : 0x00,
   };
 };
 
@@ -150,14 +156,7 @@ export const parseUartBinaryFrame = (
   fallbackState: Fx2State,
   timestamp = Date.now()
 ): Fx2IncomingMessage | null => {
-  if (!frame.ppd) {
-    return null; // PPD=0: standby/charging mode — discard silently
-  }
-
   const wearing = Boolean(frame.pud0 & 0x40); // bit6 = sensor wearing
-  // Sensor not on forehead → discard the entire frame; session stays "running"
-  // so recording auto-resumes the moment the sensor is re-worn (no data gap visible)
-  if (!wearing) return null;
 
   const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
@@ -167,11 +166,11 @@ export const parseUartBinaryFrame = (
   const powerSpectrum = frame.ch3Raw / 10;
 
   const ppgOk = Boolean(frame.pud0 & 0x04);   // bit2 = PPG signal ok
-  const noise = !ppgOk;
+  const noise = !frame.ppd || !wearing || !ppgOk;
   const bpm = frame.bpm > 0
     ? clampNumber(frame.bpm, 30, 220)
     : fallbackState.heartRate;
-  const signalQuality = wearing && ppgOk ? 88 : 42;
+  const signalQuality = frame.ppd && wearing && ppgOk ? 88 : 42;
 
   return {
     mode: fallbackState.mode,
@@ -183,11 +182,13 @@ export const parseUartBinaryFrame = (
     connection: "connected",
     noise,
     timestamp,
+    pc: frame.pc,
     ppg,
     sdppg,
     rrInterval,
     powerSpectrum,
-    ppd: true,
+    electrodeStatus: frame.electrodeStatus,
+    ppd: frame.ppd,
   };
 };
 
@@ -215,6 +216,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const sdppgValue = message.sdppg ?? 0;
   const rrIntervalValue = message.rrInterval ?? 0;
   const powerSpectrumValue = message.powerSpectrum ?? 0;
+  const pcValue = message.pc ?? prev.pc[prev.pc.length - 1] ?? 0;
 
   return {
     ...prev,
@@ -225,18 +227,15 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     heartRate: message.bpm,
     signalQuality: message.signalQuality,
     noise: message.noise,
+    electrodeStatus: message.electrodeStatus ?? prev.electrodeStatus,
     ch1: appendValue(prev.ch1, message.ch1, MAX_CHART_POINTS),
     ch2: appendValue(prev.ch2, message.ch2, MAX_CHART_POINTS),
     timestamps: appendValue(prev.timestamps, nextTimestamp, MAX_CHART_POINTS),
+    pc: appendValue(prev.pc, pcValue, MAX_CHART_POINTS),
     ppg: appendValue(prev.ppg, ppgValue, MAX_CHART_POINTS),
     sdppg: appendValue(prev.sdppg, sdppgValue, MAX_CHART_POINTS),
-    rrInterval: rrIntervalValue > 0
-      ? appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS)
-      : prev.rrInterval,
-    powerSpectrum:
-      powerSpectrumValue !== prev.powerSpectrum[prev.powerSpectrum.length - 1]
-        ? appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS)
-        : prev.powerSpectrum,
+    rrInterval: appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS),
+    powerSpectrum: appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS),
     heartRateHistory: appendValue(prev.heartRateHistory, message.bpm, METRIC_HISTORY_LIMIT),
     signalQualityHistory: appendValue(
       prev.signalQualityHistory,

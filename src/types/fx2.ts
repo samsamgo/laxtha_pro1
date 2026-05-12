@@ -27,10 +27,12 @@ export interface Fx2IncomingMessage {
   connection: "connected" | "disconnected";
   noise: boolean;
   timestamp: number;
+  pc?: number;
   ppg?: number;
   sdppg?: number;
   rrInterval?: number;
   powerSpectrum?: number;
+  electrodeStatus?: number;
   ppd?: boolean;
 }
 
@@ -60,6 +62,7 @@ export interface Fx2State {
   ch1: number[];
   ch2: number[];
   timestamps: number[];
+  pc: number[];
   ppg: number[];
   sdppg: number[];
   rrInterval: number[];
@@ -69,6 +72,7 @@ export interface Fx2State {
   sessionSeconds: number;
   sessionStartedAt: string | null;
   lastUpdated: string;
+  electrodeStatus: number | null;
   logs: string[];
   stats: Fx2SessionStats;
 }

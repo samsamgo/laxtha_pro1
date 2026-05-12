@@ -3,6 +3,7 @@ import type { DeviceMode, WearStatus, SignalStatus } from "./fx2";
 export interface EegSample {
   timestamp: string;   // ISO 8601
   elapsedMs: number;
+  pc: number;
   ch1: number;
   ch2: number;
   bpm: number;

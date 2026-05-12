@@ -69,10 +69,10 @@ export class EegSessionRecorder {
     ].join("\n");
 
     const header =
-      "timestamp,elapsed_ms,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode";
+      "timestamp,elapsed_ms,pc,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode";
     const rows = this.samples.map(
       (s) =>
-        `${s.timestamp},${s.elapsedMs},${s.ch1.toFixed(4)},${s.ch2.toFixed(4)},${s.bpm},${s.ppg.toFixed(4)},${s.sdppg.toFixed(4)},${s.rrInterval},${s.powerSpectrum.toFixed(2)},${s.wear},${s.signal},${s.mode}`
+        `${s.timestamp},${s.elapsedMs},${s.pc},${s.ch1.toFixed(4)},${s.ch2.toFixed(4)},${s.bpm},${s.ppg.toFixed(4)},${s.sdppg.toFixed(4)},${s.rrInterval},${s.powerSpectrum.toFixed(2)},${s.wear},${s.signal},${s.mode}`
     );
 
     // UTF-8 BOM for Excel compatibility
@@ -102,7 +102,7 @@ export class EegSessionRecorder {
       startedAt: new Date(startTs).toISOString(),
       endedAt: new Date(endTs).toISOString(),
       durationMs: endTs - startTs,
-      channels: ["ch1_uv", "ch2_uv", "bpm", "ppg", "sdppg", "rr_interval_ms", "power_spectrum"],
+      channels: ["pc", "ch1_uv", "ch2_uv", "bpm", "ppg", "sdppg", "rr_interval_ms", "power_spectrum"],
       sampleCount: this.samples.length,
       samples: this.samples,
     };

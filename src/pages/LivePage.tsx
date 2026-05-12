@@ -56,6 +56,36 @@ const signalLabel = {
   poor: "부족",
 } as const;
 
+const ELECTRODE_INDICATORS = [
+  { label: "REF", bit: 0x08 },
+  { label: "EEG1", bit: 0x20 },
+  { label: "EEG2", bit: 0x10 },
+] as const;
+
+function ElectrodeDots({ electrodeStatus }: { electrodeStatus: number | null }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      {ELECTRODE_INDICATORS.map(({ label, bit }) => {
+        const isKnown = electrodeStatus !== null;
+        const statusBits = electrodeStatus ?? 0;
+        const isOn = isKnown && (statusBits & bit) !== 0;
+        const dotClass = !isKnown
+          ? "bg-slate-300 dark:bg-slate-600"
+          : isOn
+          ? "bg-green-500"
+          : "bg-red-400";
+
+        return (
+          <span key={label} className="inline-flex items-center gap-1">
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotClass}`} />
+            <span>{label}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function MiniSparkline({ values, color }: { values: number[]; color: string }) {
   if (values.length < 2) return null;
   const n = Math.min(values.length, 30);
@@ -163,6 +193,7 @@ export default function LivePage() {
   const logPinnedRef = useRef(true);
   const prevPhaseRef = useRef(sessionPhase);
   const sessionStartTsRef = useRef<number | null>(null);
+  const prevTimestampLengthRef = useRef(state.timestamps.length);
 
   // Throttle secondary chart data to ~4Hz
   const secondaryRef = useRef(state);
@@ -179,33 +210,36 @@ export default function LivePage() {
     if (prev === sessionPhase) return;
     if (sessionPhase === "running") {
       sessionStartTsRef.current = Date.now();
+      prevTimestampLengthRef.current = 0;
     }
   }, [sessionPhase]);
 
-  const prevTimestampLengthRef = useRef(state.timestamps.length);
   useEffect(() => {
     if (sessionPhase !== "running") return;
-    if (state.timestamps.length === prevTimestampLengthRef.current) return;
+    const previousLength = prevTimestampLengthRef.current;
+    if (state.timestamps.length === previousLength) return;
     prevTimestampLengthRef.current = state.timestamps.length;
-    const lastIdx = state.timestamps.length - 1;
-    if (lastIdx < 0) return;
-    const ts = state.timestamps[lastIdx];
-    const startTs = sessionStartTsRef.current ?? ts;
-    appendSample({
-      timestamp: new Date(ts).toISOString(),
-      elapsedMs: Math.max(0, ts - startTs),
-      ch1: state.ch1[lastIdx] ?? 0,
-      ch2: state.ch2[lastIdx] ?? 0,
-      bpm: state.heartRate,
-      ppg: state.ppg[lastIdx] ?? 0,
-      sdppg: state.sdppg[lastIdx] ?? 0,
-      rrInterval: state.rrInterval[state.rrInterval.length - 1] ?? 0,
-      powerSpectrum: state.powerSpectrum[lastIdx] ?? 0,
-      wear: state.wearStatus,
-      signal: state.signalStatus,
-      mode: state.mode,
-    });
-  }, [state.timestamps.length, state.heartRate, state.wearStatus, state.signalStatus, sessionPhase, appendSample]);
+
+    for (let index = previousLength; index < state.timestamps.length; index++) {
+      const ts = state.timestamps[index];
+      const startTs = sessionStartTsRef.current ?? ts;
+      appendSample({
+        timestamp: new Date(ts).toISOString(),
+        elapsedMs: Math.max(0, ts - startTs),
+        pc: state.pc[index] ?? 0,
+        ch1: state.ch1[index] ?? 0,
+        ch2: state.ch2[index] ?? 0,
+        bpm: state.heartRate,
+        ppg: state.ppg[index] ?? 0,
+        sdppg: state.sdppg[index] ?? 0,
+        rrInterval: state.rrInterval[index] ?? 0,
+        powerSpectrum: state.powerSpectrum[index] ?? 0,
+        wear: state.wearStatus,
+        signal: state.signalStatus,
+        mode: state.mode,
+      });
+    }
+  }, [state.timestamps.length, state.pc, state.ch1, state.ch2, state.ppg, state.sdppg, state.rrInterval, state.powerSpectrum, state.heartRate, state.wearStatus, state.signalStatus, sessionPhase, appendSample]);
 
   const visibleLogs = useMemo(() => state.logs.slice().reverse().slice(0, 10), [state.logs]);
 
@@ -374,6 +408,8 @@ export default function LivePage() {
             <span>Web Serial</span>
             <span>·</span>
             <span>{signalLabel[state.signalStatus]}</span>
+            <span>|</span>
+            <ElectrodeDots electrodeStatus={state.electrodeStatus} />
           </div>
         </section>
 
@@ -452,6 +488,7 @@ export default function LivePage() {
               <LineChartCard values={secondary.heartRateHistory} color="#EF4444" label="심박 추이 (BPM)" />
               <LineChartCard values={secondary.ppg} timestamps={secondary.timestamps} color="#10B981" label="PPG" />
               <LineChartCard values={secondary.sdppg} timestamps={secondary.timestamps} color="#F59E0B" label="sdPPG" />
+              <LineChartCard values={secondary.pc} timestamps={secondary.timestamps} color="#0EA5E9" label="PC counter" />
               <LineChartCard values={secondary.rrInterval} color="#8B5CF6" label="RR 간격 (ms)" />
               <LineChartCard values={secondary.powerSpectrum} color="#EC4899" label="파워 스펙트럼" />
               <section className="fx2-card fx2-outline">

@@ -83,6 +83,7 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     ch2: [],
     timestamps: [],
     pc: [],
+    pcStep: [],
     ppg: [],
     sdppg: [],
     rrInterval: [],
@@ -217,6 +218,8 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const rrIntervalValue = message.rrInterval ?? 0;
   const powerSpectrumValue = message.powerSpectrum ?? 0;
   const pcValue = message.pc ?? prev.pc[prev.pc.length - 1] ?? 0;
+  const previousPc = prev.pc[prev.pc.length - 1];
+  const pcStep = previousPc === undefined ? 1 : (pcValue - previousPc + 32) % 32;
 
   return {
     ...prev,
@@ -232,6 +235,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     ch2: appendValue(prev.ch2, message.ch2, MAX_CHART_POINTS),
     timestamps: appendValue(prev.timestamps, nextTimestamp, MAX_CHART_POINTS),
     pc: appendValue(prev.pc, pcValue, MAX_CHART_POINTS),
+    pcStep: appendValue(prev.pcStep, pcStep, MAX_CHART_POINTS),
     ppg: appendValue(prev.ppg, ppgValue, MAX_CHART_POINTS),
     sdppg: appendValue(prev.sdppg, sdppgValue, MAX_CHART_POINTS),
     rrInterval: appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS),

@@ -489,6 +489,7 @@ export default function LivePage() {
               <LineChartCard values={secondary.ppg} timestamps={secondary.timestamps} color="#10B981" label="PPG" />
               <LineChartCard values={secondary.sdppg} timestamps={secondary.timestamps} color="#F59E0B" label="sdPPG" />
               <LineChartCard values={secondary.pc} timestamps={secondary.timestamps} color="#0EA5E9" label="PC counter" />
+              <LineChartCard values={secondary.pcStep} timestamps={secondary.timestamps} color="#F97316" label="PC step" />
               <LineChartCard values={secondary.rrInterval} color="#8B5CF6" label="RR 간격 (ms)" />
               <LineChartCard values={secondary.powerSpectrum} color="#EC4899" label="파워 스펙트럼" />
               <section className="fx2-card fx2-outline">

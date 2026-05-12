@@ -156,7 +156,7 @@ export class Fx2HardwareService {
     return {
       ppd: bytes[2] === 1,
       pud0: bytes[3],
-      pc: bytes[4],
+      pc: bytes[4] & 0x1f,
       bpm: bytes[5],
       pcd: bytes[6],
       electrodeStatus: bytes[7],

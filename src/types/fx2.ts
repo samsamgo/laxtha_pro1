@@ -63,6 +63,7 @@ export interface Fx2State {
   ch2: number[];
   timestamps: number[];
   pc: number[];
+  pcStep: number[];
   ppg: number[];
   sdppg: number[];
   rrInterval: number[];

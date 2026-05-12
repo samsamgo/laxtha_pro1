@@ -42,9 +42,6 @@ const THEME_COLORS: Record<ChartTheme, { background: string; grid: string; text:
 
 const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
-// Keep the full 5-minute hardware window at 60Hz before downsampling.
-// pass through without downsampling — eliminates min/max bucket artifacts
-const MAX_RENDER_POINTS = 18000;
 const MIN_Y_RANGE_UV = 1600;
 const Y_RANGE_PADDING = 0.2;
 
@@ -74,65 +71,6 @@ const formatTime = (seconds: number) =>
 const getPointCount = (ch1: number[], ch2: number[], timestamps: number[]) =>
   Math.min(ch1.length, ch2.length, timestamps.length);
 
-// Measurement-safe min/max bucket downsampling. It keeps actual sampled values
-// and uses straight line segments only; no spline or smoothing is applied.
-const downsampleMinMax = (
-  xs: Float64Array,
-  y1: DisplayValue[],
-  y2: DisplayValue[],
-  maxPoints: number
-): [Float64Array, DisplayValue[], DisplayValue[]] => {
-  const n = xs.length;
-  if (n <= maxPoints) return [xs, y1, y2];
-
-  const buckets = Math.max(1, Math.floor(maxPoints / 2));
-  const bucketSize = n / buckets;
-  const outX: number[] = [];
-  const outY1: DisplayValue[] = [];
-  const outY2: DisplayValue[] = [];
-
-  for (let b = 0; b < buckets; b++) {
-    const start = Math.floor(b * bucketSize);
-    const end = Math.min(Math.floor((b + 1) * bucketSize), n);
-    if (start >= end) continue;
-
-    let minValue = Infinity;
-    let maxValue = -Infinity;
-    let minIndex = start;
-    let maxIndex = start;
-
-    for (let i = start; i < end; i++) {
-      for (const value of [y1[i], y2[i]]) {
-        if (typeof value !== "number" || !Number.isFinite(value)) continue;
-        if (value < minValue) {
-          minValue = value;
-          minIndex = i;
-        }
-        if (value > maxValue) {
-          maxValue = value;
-          maxIndex = i;
-        }
-      }
-    }
-
-    if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
-      outX.push(xs[start]);
-      outY1.push(null);
-      outY2.push(null);
-      continue;
-    }
-
-    const indices = minIndex <= maxIndex ? [minIndex, maxIndex] : [maxIndex, minIndex];
-    for (const index of indices) {
-      outX.push(xs[index]);
-      outY1.push(y1[index]);
-      outY2.push(y2[index]);
-    }
-  }
-
-  return [new Float64Array(outX), outY1, outY2];
-};
-
 const getDisplayYTarget = (data: uPlot.AlignedData) => {
   const values: number[] = [];
   const collect = (series: uPlot.AlignedData[number]) => {
@@ -159,10 +97,6 @@ const getDisplayYTarget = (data: uPlot.AlignedData) => {
   max = Math.max(max + span * Y_RANGE_PADDING, MIN_Y_RANGE_UV / 2);
   return { min, max };
 };
-
-// When the device stops sending (electrode off, PPD=0 run, hardware disconnect),
-// leave a null gap so outages are not drawn as real 0 uV drops.
-const GAP_THRESHOLD_S = 0.5;
 
 const buildWindowedData = (
   ch1: number[],
@@ -197,13 +131,6 @@ const buildWindowedData = (
     const second: number =
       lastSecond === null || rawSecond > lastSecond ? rawSecond : lastSecond + 0.001;
 
-    // Bridge large timestamp gaps with null so the line breaks during outages.
-    if (lastSecond !== null && second - lastSecond > GAP_THRESHOLD_S) {
-      xArr.push(lastSecond + 0.0005);
-      y1Arr.push(null);
-      y2Arr.push(null);
-    }
-
     xArr.push(second);
     const v1 = ch1[src];
     const v2 = ch2[src];
@@ -212,8 +139,7 @@ const buildWindowedData = (
     lastSecond = second;
   }
 
-  const [dsX, dsY1, dsY2] = downsampleMinMax(new Float64Array(xArr), y1Arr, y2Arr, MAX_RENDER_POINTS);
-  return [dsX, dsY1, dsY2];
+  return [new Float64Array(xArr), y1Arr, y2Arr];
 };
 
 const getLatestSecond = (data: uPlot.AlignedData) => {
@@ -221,6 +147,8 @@ const getLatestSecond = (data: uPlot.AlignedData) => {
   if (xValues.length === 0) return null;
   return Number(xValues[xValues.length - 1]);
 };
+
+const RAW_LINEAR_PATH = uPlot.paths.linear?.({ alignGaps: 0 });
 
 const makeOptions = (
   width: number,
@@ -278,7 +206,9 @@ const makeOptions = (
         scale: "y",
         show: ch1Visible,
         stroke: CH1_COLOR,
-        width: 2,
+        width: 1,
+        pxAlign: false,
+        paths: RAW_LINEAR_PATH,
         points: { show: false },
         value: (_chart, v) => (v == null ? "--" : v.toFixed(2)),
       },
@@ -287,7 +217,9 @@ const makeOptions = (
         scale: "y",
         show: ch2Visible,
         stroke: CH2_COLOR,
-        width: 2,
+        width: 1,
+        pxAlign: false,
+        paths: RAW_LINEAR_PATH,
         points: { show: false },
         value: (_chart, v) => (v == null ? "--" : v.toFixed(2)),
       },
@@ -333,9 +265,6 @@ function EEGChartV2({
   const visibleRangeRef = useRef<VisibleRange | null>(null);
   const atLiveEdgeRef = useRef(true);
   const isProgrammaticScaleRef = useRef(false);
-  // Smoothly-tracked Y scale bounds — EMA prevents jarring axis jumps
-  const yScaleRef = useRef({ min: -5, max: 5 });
-
   const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
   const [showLiveButton, setShowLiveButton] = useState(false);
   const [showMoreWindows, setShowMoreWindows] = useState(false);
@@ -664,6 +593,7 @@ function EEGChartV2({
 
     chartRef.current = chart;
     latestLiveSecondRef.current = getLatestSecond(dataToRender);
+    chart.setScale("y", getDisplayYTarget(dataToRender));
 
     if (atLiveEdgeRef.current) {
       snapToLive(true);
@@ -699,16 +629,7 @@ function EEGChartV2({
 
     chart.setData(nextData, false);
 
-    // Asymmetric EMA Y scale: expand fast on new peaks, contract slowly afterward.
-    // Eliminates axis "snapping" while always keeping all values visible.
-    {
-      const { min: tMin, max: tMax } = getDisplayYTarget(nextData);
-      const ys = yScaleRef.current;
-      // Expand immediately when target is outside current range; contract slowly
-      ys.min = tMin < ys.min ? tMin : ys.min + 0.04 * (tMin - ys.min);
-      ys.max = tMax > ys.max ? tMax : ys.max + 0.04 * (tMax - ys.max);
-      chart.setScale("y", { min: ys.min, max: ys.max });
-    }
+    chart.setScale("y", getDisplayYTarget(nextData));
 
     if (atLiveEdgeRef.current) {
       snapToLive(true);

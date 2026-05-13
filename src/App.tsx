@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import { Fx2RealtimeProvider } from "./context/Fx2RealtimeContext";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -19,9 +20,10 @@ function RouteFallback() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <Fx2RealtimeProvider>
-        <Routes>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <Fx2RealtimeProvider>
+          <Routes>
           <Route
             path="/live"
             element={
@@ -44,7 +46,8 @@ export default function App() {
           />
           <Route path="*" element={<Navigate to="/live" replace />} />
         </Routes>
-      </Fx2RealtimeProvider>
-    </ThemeProvider>
+        </Fx2RealtimeProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

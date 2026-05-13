@@ -64,9 +64,16 @@ export default function SummaryPage() {
   const maxBpm = state.stats.maxHeartRate || state.heartRate;
 
   const validRr = state.rrInterval.filter((r) => r > 0);
-  const minRr = validRr.length > 0 ? Math.min(...validRr) : 0;
-  const maxRr = validRr.length > 0 ? Math.max(...validRr) : 0;
-  const avgRr = validRr.length > 0 ? Math.round(validRr.reduce((a, b) => a + b, 0) / validRr.length) : 0;
+  let minRr = 0;
+  let maxRr = 0;
+  let sumRr = 0;
+  for (let i = 0; i < validRr.length; i++) {
+    const v = validRr[i];
+    if (i === 0 || v < minRr) minRr = v;
+    if (i === 0 || v > maxRr) maxRr = v;
+    sumRr += v;
+  }
+  const avgRr = validRr.length > 0 ? Math.round(sumRr / validRr.length) : 0;
 
   const handleRestart = () => {
     startSession();

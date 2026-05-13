@@ -89,6 +89,9 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     sdppg: [],
     rrInterval: [],
     powerSpectrum: [],
+    bpmSamples: [],
+    wearSamples: [],
+    signalSamples: [],
     heartRateHistory: [],
     signalQualityHistory: [],
     sessionSeconds: 0,
@@ -159,6 +162,8 @@ export const parseUartBinaryFrame = (
   timestamp = Date.now()
 ): Fx2IncomingMessage | null => {
   const wearing = Boolean(frame.pud0 & 0x40); // bit6 = sensor wearing
+  // PPD=false means standby/charging; skip the frame so invalid raw values do not reach chart/CSV.
+  if (!frame.ppd) return null;
 
   const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
@@ -241,6 +246,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     sdppg: appendValue(prev.sdppg, sdppgValue, MAX_CHART_POINTS),
     rrInterval: appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS),
     powerSpectrum: appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS),
+    bpmSamples: appendValue(prev.bpmSamples, message.bpm, MAX_CHART_POINTS),
+    wearSamples: appendValue(prev.wearSamples, wearStatus, MAX_CHART_POINTS),
+    signalSamples: appendValue(prev.signalSamples, signalStatus, MAX_CHART_POINTS),
     heartRateHistory: appendValue(prev.heartRateHistory, message.bpm, METRIC_HISTORY_LIMIT),
     signalQualityHistory: appendValue(
       prev.signalQualityHistory,

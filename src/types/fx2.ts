@@ -68,6 +68,9 @@ export interface Fx2State {
   sdppg: number[];
   rrInterval: number[];
   powerSpectrum: number[];
+  bpmSamples: number[];
+  wearSamples: WearStatus[];
+  signalSamples: SignalStatus[];
   heartRateHistory: number[];
   signalQualityHistory: number[];
   sessionSeconds: number;

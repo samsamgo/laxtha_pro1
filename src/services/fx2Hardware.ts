@@ -55,6 +55,12 @@ export class Fx2HardwareService {
 
   private binaryBuffer: number[] = [];
 
+  private connectionTimeoutId: number | null = null;
+
+  private firstFrameReceived = false;
+
+  private serialConnectedDetail = "";
+
   constructor() {
     if (typeof navigator !== "undefined" && navigator.serial) {
       navigator.serial.addEventListener("connect", this.handleSerialConnect);
@@ -99,14 +105,9 @@ export class Fx2HardwareService {
 
       this.uartReconnectEnabled = true;
       await this.openSerialPort(port, baudRate);
-
-      const info = port.getInfo();
-      const portLabel = info.usbVendorId
-        ? `USB VID:${info.usbVendorId.toString(16).toUpperCase()}`
-        : "SPP/COM";
-      this.setStatus("connected", `Web Serial (${portLabel}) ${baudRate}bps`);
       return true;
     } catch (error) {
+      this.clearConnectionTimeout();
       this.uartReconnectEnabled = false;
       const detail =
         error instanceof Error ? error.message : "Web Serial 연결에 실패했습니다.";
@@ -118,6 +119,8 @@ export class Fx2HardwareService {
   async disconnect() {
     this.isIntentionalDisconnect = true;
     this.serialAbort = true;
+    this.clearConnectionTimeout();
+    this.firstFrameReceived = false;
 
     if (this.serialReader) {
       const reader = this.serialReader;
@@ -197,7 +200,78 @@ export class Fx2HardwareService {
   }
 
   private emit(event: Fx2HardwareEvent) {
+    if (event.type === "packet" && event.mode === "serial") {
+      this.markFirstFrameReceived();
+    }
+
     this.listeners.forEach((listener) => listener(event));
+  }
+
+  private clearConnectionTimeout() {
+    if (this.connectionTimeoutId === null) {
+      return;
+    }
+
+    window.clearTimeout(this.connectionTimeoutId);
+    this.connectionTimeoutId = null;
+  }
+
+  private startConnectionTimeout() {
+    this.clearConnectionTimeout();
+    this.firstFrameReceived = false;
+    this.connectionTimeoutId = window.setTimeout(() => {
+      this.connectionTimeoutId = null;
+
+      if (this.firstFrameReceived || this.status !== "connecting") {
+        return;
+      }
+
+      this.uartReconnectEnabled = false;
+      this.setStatus("error", "OMC-M10 프레임이 5초 동안 수신되지 않았습니다. 다른 포트를 선택해 주세요.");
+      void this.closeSerialPortAfterFailedHandshake();
+    }, 5000);
+  }
+
+  private markFirstFrameReceived() {
+    if (this.firstFrameReceived) {
+      return;
+    }
+
+    this.firstFrameReceived = true;
+    this.clearConnectionTimeout();
+
+    if (this.status === "connecting") {
+      this.setStatus("connected", this.serialConnectedDetail);
+    }
+  }
+
+  private async closeSerialPortAfterFailedHandshake() {
+    this.serialAbort = true;
+    this.binaryBuffer = [];
+
+    if (this.serialReader) {
+      const reader = this.serialReader;
+      this.serialReader = null;
+      try {
+        await reader.cancel();
+      } catch {
+        // Reader cancellation can fail if the stream is already closed.
+      }
+      try {
+        reader.releaseLock();
+      } catch {
+        // The read loop may have already released the lock.
+      }
+    }
+
+    if (this.serialPort) {
+      try {
+        await this.serialPort.close();
+      } catch {
+        // Port closing can fail if the device was removed.
+      }
+      this.serialPort = null;
+    }
   }
 
   private matchesUartFilter(port: SerialPort) {
@@ -253,6 +327,13 @@ export class Fx2HardwareService {
     this.serialPort = port;
     this.lastSerialPort = port;
     this.serialAbort = false;
+    const info = port.getInfo();
+    const portLabel = info.usbVendorId
+      ? `USB VID:${info.usbVendorId.toString(16).toUpperCase()}`
+      : "SPP/COM";
+    this.serialConnectedDetail = `Web Serial (${portLabel}) ${baudRate}bps`;
+    this.setStatus("connecting", "프레임 수신 대기 중…");
+    this.startConnectionTimeout();
     void this.readSerialLoop();
   }
 
@@ -284,7 +365,6 @@ export class Fx2HardwareService {
       }
 
       await this.openSerialPort(port, this.lastUartBaudRate);
-      this.setStatus("connected", `Web Serial ${this.lastUartBaudRate}bps`);
     } catch {
       // Ignore transient failures and wait for the next connect event.
     }
@@ -318,6 +398,10 @@ export class Fx2HardwareService {
         this.setStatus("error", detail);
       }
     } finally {
+      if (!this.isIntentionalDisconnect && this.status === "connected") {
+        this.setStatus("idle", "스트림이 종료되어 연결이 해제됐습니다.");
+      }
+
       if (this.serialReader) {
         try { this.serialReader.releaseLock(); } catch { /* ignore */ }
         this.serialReader = null;

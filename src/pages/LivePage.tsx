@@ -229,17 +229,17 @@ export default function LivePage() {
         pc: state.pc[index] ?? 0,
         ch1: state.ch1[index] ?? 0,
         ch2: state.ch2[index] ?? 0,
-        bpm: state.heartRate,
+        bpm: state.bpmSamples[index] ?? state.heartRate,
         ppg: state.ppg[index] ?? 0,
         sdppg: state.sdppg[index] ?? 0,
         rrInterval: state.rrInterval[index] ?? 0,
         powerSpectrum: state.powerSpectrum[index] ?? 0,
-        wear: state.wearStatus,
-        signal: state.signalStatus,
+        wear: state.wearSamples[index] ?? state.wearStatus,
+        signal: state.signalSamples[index] ?? state.signalStatus,
         mode: state.mode,
       });
     }
-  }, [state.timestamps.length, state.pc, state.ch1, state.ch2, state.ppg, state.sdppg, state.rrInterval, state.powerSpectrum, state.heartRate, state.wearStatus, state.signalStatus, sessionPhase, appendSample]);
+  }, [state.timestamps.length, state.pc, state.ch1, state.ch2, state.ppg, state.sdppg, state.rrInterval, state.powerSpectrum, state.bpmSamples, state.wearSamples, state.signalSamples, state.heartRate, state.wearStatus, state.signalStatus, sessionPhase, appendSample]);
 
   const visibleLogs = useMemo(() => state.logs.slice().reverse().slice(0, 10), [state.logs]);
 

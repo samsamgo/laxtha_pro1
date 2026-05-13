@@ -139,8 +139,13 @@ const getDisplayYTarget = (data: uPlot.AlignedData) => {
     return { min: -MIN_Y_RANGE_UV / 2, max: MIN_Y_RANGE_UV / 2 };
   }
 
-  let min = Math.min(0, ...values);
-  let max = Math.max(0, ...values);
+  let min = 0;
+  let max = 0;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
   const span = Math.max(max - min, 1);
   min = Math.min(min - span * Y_RANGE_PADDING, -MIN_Y_RANGE_UV / 2);
   max = Math.max(max + span * Y_RANGE_PADDING, MIN_Y_RANGE_UV / 2);

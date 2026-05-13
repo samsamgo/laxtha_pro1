@@ -10,34 +10,171 @@ interface LineChartCardProps {
   label?: string;
 }
 
-// Keep only the most recent N points — sliding window, no growing history
-const MAX_POINTS = 3600;
+// Keep a bounded live window without dropping detail from higher sample rates.
+const WINDOW_SECONDS = 60;
+const MAX_POINTS = 7200;
+const CHART_HEIGHT = 100;
 
-function buildData(values: number[], timestamps?: number[]): uPlot.AlignedData {
-  if (values.length === 0) {
-    return [new Float64Array([0]), new Float64Array([0])];
-  }
-  const sliceStart = Math.max(0, values.length - MAX_POINTS);
-  const vs = values.slice(sliceStart);
-  const ts = timestamps ? timestamps.slice(sliceStart) : undefined;
-  const hasTs = !!ts && ts.length === vs.length;
-  const xData = hasTs
-    ? Float64Array.from(ts!.map((t) => t / 1000))
-    : Float64Array.from(vs.map((_, i) => i));
-  return [xData, Float64Array.from(vs)];
+function hasAlignedTimestamps(values: number[], timestamps?: number[]): timestamps is number[] {
+  return !!timestamps && timestamps.length === values.length;
 }
 
-function makeOpts(w: number, color: string, darkMode: boolean): uPlot.Options {
+function buildData(values: number[], timestamps?: number[]): uPlot.AlignedData {
+  const xs: number[] = [];
+  const ys: number[] = [];
+
+  if (values.length === 0) {
+    return [new Float64Array(), new Float64Array()];
+  }
+
+  if (hasAlignedTimestamps(values, timestamps)) {
+    let latestTime = Number.NaN;
+
+    for (let i = values.length - 1; i >= 0; i -= 1) {
+      const value = values[i];
+      const time = timestamps[i] / 1000;
+      if (Number.isFinite(value) && Number.isFinite(time)) {
+        latestTime = time;
+        break;
+      }
+    }
+
+    if (!Number.isFinite(latestTime)) {
+      return [new Float64Array(), new Float64Array()];
+    }
+
+    const minTime = latestTime - WINDOW_SECONDS;
+
+    for (let i = values.length - 1; i >= 0 && xs.length < MAX_POINTS; i -= 1) {
+      const value = values[i];
+      const time = timestamps[i] / 1000;
+
+      if (!Number.isFinite(value) || !Number.isFinite(time)) {
+        continue;
+      }
+
+      if (time < minTime) {
+        break;
+      }
+
+      xs.push(time);
+      ys.push(value);
+    }
+
+    xs.reverse();
+    ys.reverse();
+  } else {
+    const sliceStart = Math.max(0, values.length - MAX_POINTS);
+
+    for (let i = sliceStart; i < values.length; i += 1) {
+      const value = values[i];
+
+      if (!Number.isFinite(value)) {
+        continue;
+      }
+
+      xs.push(i);
+      ys.push(value);
+    }
+  }
+
+  return [Float64Array.from(xs), Float64Array.from(ys)];
+}
+
+function paddedRange(_u: uPlot, dataMin: number | null, dataMax: number | null): [number, number] {
+  if (dataMin === null || dataMax === null || !Number.isFinite(dataMin) || !Number.isFinite(dataMax)) {
+    return [-1, 1];
+  }
+
+  if (dataMin === dataMax) {
+    const pad = Math.max(Math.abs(dataMin || 0) * 0.08, 1);
+    return [dataMin - pad, dataMax + pad];
+  }
+
+  const pad = Math.max((dataMax - dataMin) * 0.12, Math.abs(dataMax) * 0.01, 0.001);
+  return [dataMin - pad, dataMax + pad];
+}
+
+function drawBaseline(stroke: string) {
+  return (u: uPlot) => {
+    const yScale = u.scales.y;
+    const yMin = yScale.min;
+    const yMax = yScale.max;
+
+    if (!Number.isFinite(yMin) || !Number.isFinite(yMax) || yMin! > 0 || yMax! < 0) {
+      return;
+    }
+
+    const ctx = u.ctx;
+    const y = Math.round(u.valToPos(0, "y", true)) + 0.5;
+    const x0 = u.bbox.left;
+    const x1 = u.bbox.left + u.bbox.width;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+    ctx.restore();
+  };
+}
+
+function formatTimeLabels(_u: uPlot, values: number[]): string[] {
+  return values.map((value) =>
+    new Date(value * 1000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }),
+  );
+}
+
+function makeOpts(w: number, color: string, darkMode: boolean, timeAxis: boolean): uPlot.Options {
   const gridColor = darkMode ? "#1E293B" : "#F1F5F9";
+  const baselineColor = darkMode ? "#334155" : "#E5E7EB";
   const textColor = darkMode ? "#64748B" : "#9CA3AF";
+
   return {
     width: w,
-    height: 100,
+    height: CHART_HEIGHT,
     cursor: { show: false },
     legend: { show: false },
-    padding: [4, 4, 4, 0],
+    padding: [6, 4, 6, 0],
+    scales: {
+      x: {
+        time: timeAxis,
+        range: (_u, dataMin, dataMax) => {
+          if (!Number.isFinite(dataMin) || !Number.isFinite(dataMax)) {
+            return [0, 1];
+          }
+
+          if (timeAxis) {
+            return [dataMax - WINDOW_SECONDS, dataMax];
+          }
+
+          if (dataMin === dataMax) {
+            return [dataMin - 1, dataMax + 1];
+          }
+
+          return [dataMin, dataMax];
+        },
+      },
+      y: {
+        range: paddedRange,
+      },
+    },
     axes: [
-      { show: false },
+      {
+        show: timeAxis,
+        stroke: textColor,
+        grid: { show: false },
+        ticks: { show: false },
+        size: timeAxis ? 18 : 0,
+        values: timeAxis ? formatTimeLabels : undefined,
+      },
       {
         stroke: textColor,
         grid: { stroke: gridColor, width: 1 },
@@ -53,6 +190,9 @@ function makeOpts(w: number, color: string, darkMode: boolean): uPlot.Options {
         points: { show: false },
       },
     ],
+    hooks: {
+      draw: [drawBaseline(baselineColor)],
+    },
   };
 }
 
@@ -60,17 +200,18 @@ function LineChartCard({ values, timestamps, color, label }: LineChartCardProps)
   const containerRef = useRef<HTMLDivElement>(null);
   const uRef = useRef<uPlot | null>(null);
   const { darkMode } = useFx2Theme();
+  const timeAxis = hasAlignedTimestamps(values, timestamps);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const w = el.clientWidth > 0 ? el.clientWidth : 300;
     uRef.current?.destroy();
-    uRef.current = new uPlot(makeOpts(w, color, darkMode), buildData(values, timestamps), el);
+    uRef.current = new uPlot(makeOpts(w, color, darkMode, timeAxis), buildData(values, timestamps), el);
 
     const ro = new ResizeObserver(([entry]) => {
       const newW = Math.floor(entry.contentRect.width);
-      if (newW > 0) uRef.current?.setSize({ width: newW, height: 100 });
+      if (newW > 0) uRef.current?.setSize({ width: newW, height: CHART_HEIGHT });
     });
     ro.observe(el);
 
@@ -80,7 +221,7 @@ function LineChartCard({ values, timestamps, color, label }: LineChartCardProps)
       uRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [color, darkMode]);
+  }, [color, darkMode, timeAxis]);
 
   useEffect(() => {
     uRef.current?.setData(buildData(values, timestamps));

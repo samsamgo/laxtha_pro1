@@ -44,6 +44,10 @@ const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
 const MIN_Y_RANGE_UV = 1600;
 const Y_RANGE_PADDING = 0.2;
+const DEFAULT_SAMPLE_INTERVAL_SECONDS = 1 / 60;
+const MIN_SAMPLE_INTERVAL_SECONDS = 0.001;
+const MAX_DUPLICATE_SAMPLE_INTERVAL_SECONDS = 1 / 30;
+const LIVE_EDGE_TOLERANCE_SECONDS = 0.5;
 
 // Quick buttons visible without dropdown
 const QUICK_WINDOWS: ExtWindowSeconds[] = [30, 60, 300];
@@ -70,6 +74,51 @@ const formatTime = (seconds: number) =>
 
 const getPointCount = (ch1: number[], ch2: number[], timestamps: number[]) =>
   Math.min(ch1.length, ch2.length, timestamps.length);
+
+const clampSampleInterval = (seconds: number) =>
+  Math.min(
+    MAX_DUPLICATE_SAMPLE_INTERVAL_SECONDS,
+    Math.max(MIN_SAMPLE_INTERVAL_SECONDS, seconds)
+  );
+
+const inferSampleIntervalSeconds = (
+  timestamps: number[],
+  startIndex: number,
+  pointCount: number
+) => {
+  const candidates: number[] = [];
+  const firstMs = timestamps[startIndex];
+  const latestMs = timestamps[pointCount - 1];
+  const renderedPointCount = pointCount - startIndex;
+
+  if (
+    renderedPointCount > 1 &&
+    Number.isFinite(firstMs) &&
+    Number.isFinite(latestMs) &&
+    latestMs > firstMs
+  ) {
+    candidates.push((latestMs - firstMs) / 1000 / (renderedPointCount - 1));
+  }
+
+  const positiveDeltas: number[] = [];
+  for (let i = startIndex + 1; i < pointCount; i++) {
+    const deltaMs = timestamps[i] - timestamps[i - 1];
+    if (Number.isFinite(deltaMs) && deltaMs > 0) {
+      positiveDeltas.push(deltaMs / 1000);
+    }
+  }
+
+  if (positiveDeltas.length > 0) {
+    positiveDeltas.sort((a, b) => a - b);
+    candidates.push(positiveDeltas[Math.floor(positiveDeltas.length / 2)]);
+  }
+
+  if (candidates.length === 0) {
+    return DEFAULT_SAMPLE_INTERVAL_SECONDS;
+  }
+
+  return clampSampleInterval(Math.min(...candidates));
+};
 
 const getDisplayYTarget = (data: uPlot.AlignedData) => {
   const values: number[] = [];
@@ -121,25 +170,33 @@ const buildWindowedData = (
   }
   const startIndex = lo;
 
-  const xArr: number[] = [];
+  const renderPointCount = pointCount - startIndex;
+  const xArr = new Float64Array(renderPointCount);
   const y1Arr: DisplayValue[] = [];
   const y2Arr: DisplayValue[] = [];
-  let lastSecond: number | null = null;
+  const sampleIntervalSeconds = inferSampleIntervalSeconds(timestamps, startIndex, pointCount);
+  let nextAllowedSecond = Number.POSITIVE_INFINITY;
+
+  for (let src = pointCount - 1, dest = renderPointCount - 1; src >= startIndex; src--, dest--) {
+    const rawSecond = timestamps[src] / 1000;
+    let second = Number.isFinite(rawSecond) ? rawSecond : nextAllowedSecond - sampleIntervalSeconds;
+
+    if (second >= nextAllowedSecond) {
+      second = nextAllowedSecond - sampleIntervalSeconds;
+    }
+
+    xArr[dest] = second;
+    nextAllowedSecond = second;
+  }
 
   for (let src = startIndex; src < pointCount; src++) {
-    const rawSecond = timestamps[src] / 1000;
-    const second: number =
-      lastSecond === null || rawSecond > lastSecond ? rawSecond : lastSecond + 0.001;
-
-    xArr.push(second);
     const v1 = ch1[src];
     const v2 = ch2[src];
     y1Arr.push(v1 !== undefined && Number.isFinite(v1) ? v1 : null);
     y2Arr.push(v2 !== undefined && Number.isFinite(v2) ? v2 : null);
-    lastSecond = second;
   }
 
-  return [new Float64Array(xArr), y1Arr, y2Arr];
+  return [xArr, y1Arr, y2Arr];
 };
 
 const getLatestSecond = (data: uPlot.AlignedData) => {
@@ -324,7 +381,7 @@ function EEGChartV2({
       return;
     }
 
-    const isAtLiveEdge = xMax >= latestSecond - 0.25;
+    const isAtLiveEdge = xMax >= latestSecond - LIVE_EDGE_TOLERANCE_SECONDS;
     atLiveEdgeRef.current = isAtLiveEdge;
     setShowLiveButton(!isAtLiveEdge);
   }, []);
@@ -616,7 +673,15 @@ function EEGChartV2({
       return;
     }
 
-    const nextData = bufferedDataRef.current ?? chartData;
+    const bufferedData = bufferedDataRef.current;
+    const bufferedLatestSecond = bufferedData ? getLatestSecond(bufferedData) : null;
+    const chartLatestSecond = getLatestSecond(chartData);
+    const nextData =
+      bufferedData !== null &&
+      bufferedLatestSecond !== null &&
+      (chartLatestSecond === null || bufferedLatestSecond >= chartLatestSecond)
+        ? bufferedData
+        : chartData;
     bufferedDataRef.current = null;
     displayDataRef.current = nextData;
     latestLiveSecondRef.current = getLatestSecond(nextData);
@@ -626,15 +691,18 @@ function EEGChartV2({
 
     const previousXMin = chart.scales.x.min;
     const previousXMax = chart.scales.x.max;
+    const wasAtLiveEdge = atLiveEdgeRef.current;
 
     chart.setData(nextData, false);
 
     chart.setScale("y", getDisplayYTarget(nextData));
 
-    if (atLiveEdgeRef.current) {
+    if (wasAtLiveEdge) {
       snapToLive(true);
     } else if (previousXMin !== undefined && previousXMax !== undefined) {
       setVisibleRange(chart, previousXMin, previousXMax);
+      syncLiveEdgeState(chart);
+    } else {
       syncLiveEdgeState(chart);
     }
   }, [chartData, paused, snapToLive, syncLiveEdgeState, setVisibleRange]);

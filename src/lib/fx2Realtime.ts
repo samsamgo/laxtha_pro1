@@ -12,6 +12,7 @@ export const MAX_CHART_POINTS = 72000; // 20 min at 60 Hz hardware; months at 1 
 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
+const HARDWARE_TIMESTAMP_STEP_MS = 1000 / 60;
 // Single-copy append: avoids the double-allocation of [...arr, v].slice()
 const appendValue = <T,>(history: T[], value: T, max: number): T[] => {
   const next = history.length < max ? history.slice() : history.slice(1);
@@ -29,7 +30,7 @@ const normalizeTimestamp = (previousTimestamp: number | undefined, nextTimestamp
     return nextTimestamp;
   }
 
-  return Math.max(nextTimestamp, previousTimestamp + 1);
+  return Math.max(nextTimestamp, previousTimestamp + HARDWARE_TIMESTAMP_STEP_MS);
 };
 
 

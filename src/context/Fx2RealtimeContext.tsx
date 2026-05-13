@@ -20,7 +20,7 @@ import {
   type Fx2HardwareStatus,
 } from "../services/fx2Hardware";
 import type { EegSample, EegSessionSummary } from "../types/eegRecorder";
-import type { DeviceMode, Fx2BinaryFrame, Fx2IncomingMessage, Fx2State } from "../types/fx2";
+import type { DeviceMode, Fx2BinaryFrame, Fx2State } from "../types/fx2";
 
 type SessionPhase = "idle" | "running" | "stopped";
 
@@ -28,9 +28,9 @@ const HARDWARE_SAMPLE_RATE_HZ = 60;
 const HARDWARE_SAMPLE_INTERVAL_MS = 1000 / HARDWARE_SAMPLE_RATE_HZ;
 const UART_PC_MODULO = 32;
 
-interface HardwareSampleClock {
-  lastPc: number | null;
-  lastTimestamp: number | null;
+interface TimestampedHardwareFrame {
+  frame: Fx2BinaryFrame;
+  timestamp: number;
 }
 
 interface Fx2RealtimeContextValue {
@@ -60,57 +60,69 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
 
   const hardwareRef = useRef(new Fx2HardwareService());
-  const stateRef = useRef(state);
-  const pendingHardwareRef = useRef<Fx2IncomingMessage[]>([]);
+  const pendingHardwareRef = useRef<Fx2BinaryFrame[]>([]);
   const recorderRef = useRef(new EegSessionRecorder());
   const recTickRef = useRef<number | null>(null);
   const renderTickRef = useRef<number | null>(null);
   const sessionActiveRef = useRef(false);
   const sessionPhaseRef = useRef<SessionPhase>("idle");
-  const hardwareSampleClockRef = useRef<HardwareSampleClock>({
-    lastPc: null,
-    lastTimestamp: null,
-  });
   const [recorderSummary, setRecorderSummary] = useState<EegSessionSummary>(
     () => recorderRef.current.getSummary()
   );
 
   useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  useEffect(() => {
     sessionPhaseRef.current = sessionPhase;
   }, [sessionPhase]);
 
-  const resetHardwareSampleClock = () => {
-    hardwareSampleClockRef.current = {
-      lastPc: null,
-      lastTimestamp: null,
-    };
+  const getPcSampleSteps = (previousPc: number | undefined, nextPc: number | undefined) => {
+    if (previousPc === undefined || nextPc === undefined) return 1;
+    const pcDelta = (nextPc - previousPc + UART_PC_MODULO) % UART_PC_MODULO;
+    return pcDelta > 0 ? pcDelta : 1;
   };
 
-  const nextHardwareTimestamp = (frame: Fx2BinaryFrame) => {
-    const now = Date.now();
-    const clock = hardwareSampleClockRef.current;
+  const timestampHardwareBatch = (
+    frames: Fx2BinaryFrame[],
+    previousTimestamp: number | undefined,
+    previousPc: number | undefined,
+    now = Date.now()
+  ): TimestampedHardwareFrame[] => {
+    if (frames.length === 0) return [];
 
-    if (clock.lastTimestamp === null || clock.lastPc === null) {
-      clock.lastPc = frame.pc;
-      clock.lastTimestamp = now;
-      return now;
+    const intervalsFromPrevious = frames.map((frame, index) => {
+      const priorPc = index === 0 ? previousPc : frames[index - 1].pc;
+      return getPcSampleSteps(priorPc, frame.pc) * HARDWARE_SAMPLE_INTERVAL_MS;
+    });
+
+    const intraBatchDuration = intervalsFromPrevious
+      .slice(1)
+      .reduce((total, interval) => total + interval, 0);
+
+    let firstTimestamp = now - intraBatchDuration;
+
+    if (previousTimestamp !== undefined) {
+      const minimumFirstTimestamp = previousTimestamp + intervalsFromPrevious[0];
+      firstTimestamp = Math.max(firstTimestamp, minimumFirstTimestamp);
     }
 
-    const pcDelta = (frame.pc - clock.lastPc + UART_PC_MODULO) % UART_PC_MODULO;
-    const sampleSteps = pcDelta > 0 ? pcDelta : 1;
-    let nextTimestamp = clock.lastTimestamp + sampleSteps * HARDWARE_SAMPLE_INTERVAL_MS;
+    let timestamp = firstTimestamp;
+    return frames.map((frame, index) => {
+      if (index > 0) {
+        timestamp += intervalsFromPrevious[index];
+      }
 
-    if (Math.abs(now - nextTimestamp) > 1000) {
-      nextTimestamp = now;
-    }
+      return { frame, timestamp };
+    });
+  };
 
-    clock.lastPc = frame.pc;
-    clock.lastTimestamp = nextTimestamp;
-    return nextTimestamp;
+  const applyHardwareFrames = (frames: Fx2BinaryFrame[], prev: Fx2State) => {
+    const previousTimestamp = prev.timestamps[prev.timestamps.length - 1];
+    const previousPc = prev.pc[prev.pc.length - 1];
+    const timestampedFrames = timestampHardwareBatch(frames, previousTimestamp, previousPc);
+
+    return timestampedFrames.reduce((nextState, { frame, timestamp }) => {
+      const nextMessage = parseUartBinaryFrame(frame, nextState, timestamp);
+      return nextMessage ? applyIncomingMessage(nextMessage, nextState) : nextState;
+    }, prev);
   };
 
   useEffect(() => {
@@ -130,7 +142,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
         // Hardware physically disconnected during session — stop recording
         if (event.status === "idle" && sessionPhaseRef.current === "running") {
           sessionActiveRef.current = false;
-          resetHardwareSampleClock();
+          pendingHardwareRef.current = [];
           setSessionPhase("stopped");
           setState((prev) => ({
             ...prev,
@@ -143,13 +155,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
 
       if (!sessionActiveRef.current) return;
 
-      const timestamp = nextHardwareTimestamp(event.frame);
-      const nextMessage = parseUartBinaryFrame(event.frame, stateRef.current, timestamp);
-      if (!nextMessage) return;
-
       // Buffer frames; a 30Hz interval drains and applies them to avoid
       // per-frame React renders at full 60Hz hardware rate
-      pendingHardwareRef.current.push(nextMessage);
+      pendingHardwareRef.current.push(event.frame);
     });
   }, []);
 
@@ -157,9 +165,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     renderTickRef.current = window.setInterval(() => {
       if (!sessionActiveRef.current || pendingHardwareRef.current.length === 0) return;
-      const messages = pendingHardwareRef.current;
+      const frames = pendingHardwareRef.current;
       pendingHardwareRef.current = [];
-      setState((prev) => messages.reduce((s, msg) => applyIncomingMessage(msg, s), prev));
+      setState((prev) => applyHardwareFrames(frames, prev));
     }, 33); // ~30 Hz
     return () => {
       if (renderTickRef.current !== null) window.clearInterval(renderTickRef.current);
@@ -197,7 +205,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const disconnectDevice = () => {
     sessionActiveRef.current = false;
     pendingHardwareRef.current = [];
-    resetHardwareSampleClock();
     if (sessionPhaseRef.current === "running") {
       recorderRef.current.stopRecording();
       stopRecTick();
@@ -215,7 +222,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   // Start recording — hardware must already be connected.
   const startSession = () => {
     sessionActiveRef.current = true;
-    resetHardwareSampleClock();
+    pendingHardwareRef.current = [];
     setState(createInitialFx2State("serial"));
     setSessionPhase("running");
     recorderRef.current.startRecording("serial");
@@ -226,7 +233,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   // Stop recording — keeps hardware connected for smooth restart.
   const stopSession = () => {
     sessionActiveRef.current = false;
-    resetHardwareSampleClock();
+    pendingHardwareRef.current = [];
     setSessionPhase("stopped");
     setState((prev) => ({
       ...prev,

@@ -40,6 +40,13 @@ interface Fx2RealtimeContextValue {
   sessionPhase: SessionPhase;
   hardwareStatus: Fx2HardwareStatus;
   recorderSummary: EegSessionSummary;
+  /**
+   * True once the user has disconnected the device in this tab. Web Serial does not reliably
+   * reopen Bluetooth SPP COM ports after a manual close on Windows/Chrome — a page reload is
+   * the most reliable recovery. LivePage uses this flag to gate the connect button and offer
+   * a reload prompt.
+   */
+  needsReload: boolean;
   setSelectedMode: (mode: DeviceMode) => void;
   connectDevice: () => Promise<boolean>;
   disconnectDevice: () => void;
@@ -58,6 +65,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>("idle");
   const [state, setState] = useState<Fx2State>(() => createInitialFx2State("serial"));
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
+  const [needsReload, setNeedsReload] = useState(false);
 
   const hardwareRef = useRef(new Fx2HardwareService());
   const pendingHardwareRef = useRef<Fx2BinaryFrame[]>([]);
@@ -197,7 +205,18 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   };
 
   // Connect hardware — shows port picker. Does NOT start recording.
+  // After a manual disconnect in this tab, Web Serial can fail to reopen the same port
+  // (especially Bluetooth SPP on Windows). Prompt for a reload instead of attempting reconnect.
   const connectDevice = async (): Promise<boolean> => {
+    if (needsReload) {
+      const confirmed = window.confirm(
+        "안정적인 재연결을 위해 페이지를 새로고침해야 합니다.\n새로고침하시겠습니까?\n\n• 현재 화면에 남아 있는 측정값은 사라집니다.\n• 저장하지 않은 CSV/JSON이 있다면 먼저 내보내 주세요."
+      );
+      if (confirmed) {
+        window.location.reload();
+      }
+      return false;
+    }
     return hardwareRef.current.connectSerial();
   };
 
@@ -212,10 +231,11 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     }
     void hardwareRef.current.disconnect();
     setSessionPhase("idle");
+    setNeedsReload(true);
     setState((prev) => ({
       ...prev,
       connected: false,
-      logs: appendLog(prev.logs, "장치 연결을 해제했습니다."),
+      logs: appendLog(prev.logs, "장치 연결을 해제했습니다. 재연결하려면 페이지를 새로고침하세요."),
     }));
   };
 
@@ -270,6 +290,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       sessionPhase,
       hardwareStatus,
       recorderSummary,
+      needsReload,
       setSelectedMode,
       connectDevice,
       disconnectDevice,
@@ -281,7 +302,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       clearRecording,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hardwareStatus, recorderSummary, selectedMode, sessionPhase, state]
+    [hardwareStatus, recorderSummary, selectedMode, sessionPhase, state, needsReload]
   );
 
   return <Fx2RealtimeContext.Provider value={value}>{children}</Fx2RealtimeContext.Provider>;

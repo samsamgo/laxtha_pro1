@@ -851,6 +851,7 @@ function EEGChartV2({
                 type="button"
                 onClick={captureChart}
                 title="차트 PNG 저장"
+                aria-label="현재 차트를 PNG로 저장"
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${secondaryButtonClass}`}
               >
                 📷 차트 캡처
@@ -860,6 +861,8 @@ function EEGChartV2({
                 type="button"
                 onClick={toggleVideoRecording}
                 title={isRecordingVideo ? "녹화 중지 및 저장" : "동영상 녹화 시작"}
+                aria-label={isRecordingVideo ? "동영상 녹화 중지 및 저장" : "차트 동영상 녹화 시작"}
+                aria-pressed={isRecordingVideo}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
                   isRecordingVideo
                     ? "animate-pulse bg-red-500 text-white"
@@ -884,10 +887,18 @@ function EEGChartV2({
         </div>
       </div>
 
-      <div className="relative h-[280px] min-h-[280px] w-full overflow-hidden rounded-2xl sm:h-[340px] md:h-[400px] lg:h-[480px]">
+      <div
+        className="relative h-[280px] min-h-[280px] w-full overflow-hidden rounded-2xl sm:h-[340px] md:h-[400px] lg:h-[480px]"
+        role="img"
+        aria-label="좌·우 EEG 채널 실시간 차트 (CH1·CH2, μV)"
+      >
         {paused ? (
-          <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-slate-900/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
-            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+          <div
+            role="status"
+            aria-live="polite"
+            className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-slate-900/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm"
+          >
+            <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full bg-amber-400" />
             일시정지 · Space 재개
           </div>
         ) : null}
@@ -901,6 +912,20 @@ function EEGChartV2({
           </button>
         ) : null}
         <div ref={containerRef} className="h-full w-full" />
+
+        {/* Empty-state overlay shown until first samples arrive */}
+        {ch1.length === 0 ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 text-center text-[#9CA3AF] dark:text-slate-600"
+          >
+            <svg viewBox="0 0 64 32" className="h-8 w-32 opacity-50" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 16 L10 16 L14 8 L20 24 L26 4 L32 28 L38 12 L44 16 L52 16 L62 16" />
+            </svg>
+            <p className="text-xs font-medium">측정을 시작하면 실시간 EEG 그래프가 표시됩니다</p>
+            <p className="text-[10px]">CH1 좌뇌 · CH2 우뇌 · 단위 μV</p>
+          </div>
+        ) : null}
       </div>
     </section>
   );

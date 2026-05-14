@@ -6,6 +6,9 @@
   font-family: "Inter", "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
   color: #111827;
   background-color: #F4F7FB;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 html {
@@ -35,6 +38,55 @@ html.dark body {
 
 #root {
   min-height: 100vh;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(37, 99, 235, 0.18);
+  color: inherit;
+}
+
+/* Global focus ring — only when navigating via keyboard */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+html.dark :focus-visible {
+  outline-color: #60A5FA;
+}
+
+/* Skip-to-content link, visible when focused via Tab */
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 12px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #2563EB;
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px -8px rgba(37, 99, 235, 0.4);
+  transition: top 200ms ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 12px;
+}
+
+/* Honor user's reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* 전역 커스텀 스크롤바 — 얇고 세련된 스타일 */
@@ -99,5 +151,18 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 
   .fx2-outline {
     @apply border border-transparent dark:border-slate-700;
+  }
+
+  /* Standardized button variants for consistency across the app */
+  .fx2-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#1D4ED8] hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-sm;
+  }
+
+  .fx2-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#374151] transition-colors duration-200 hover:bg-[#111827] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 dark:hover:text-white;
+  }
+
+  .fx2-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition-colors duration-200 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white;
   }
 }

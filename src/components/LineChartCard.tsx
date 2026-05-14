@@ -8,6 +8,8 @@ interface LineChartCardProps {
   timestamps?: number[];
   color: string;
   label?: string;
+  /** Friendly one-line explanation shown under the label for non-expert users. */
+  description?: string;
 }
 
 // Keep a bounded live window without dropping detail from higher sample rates.
@@ -196,7 +198,7 @@ function makeOpts(w: number, color: string, darkMode: boolean, timeAxis: boolean
   };
 }
 
-function LineChartCard({ values, timestamps, color, label }: LineChartCardProps) {
+function LineChartCard({ values, timestamps, color, label, description }: LineChartCardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const uRef = useRef<uPlot | null>(null);
   const { darkMode } = useFx2Theme();
@@ -230,11 +232,22 @@ function LineChartCard({ values, timestamps, color, label }: LineChartCardProps)
   return (
     <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
       {label ? (
-        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-          <span className="inline-block h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">
-            {label}
-          </p>
+        <div className="px-3 pt-2.5 pb-1">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="inline-block h-2 w-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: color }}
+            />
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">
+              {label}
+            </p>
+          </div>
+          {description ? (
+            <p className="mt-0.5 ml-4 text-[10px] leading-4 text-[#9CA3AF] dark:text-slate-500">
+              {description}
+            </p>
+          ) : null}
         </div>
       ) : null}
       <div ref={containerRef} className="w-full" />

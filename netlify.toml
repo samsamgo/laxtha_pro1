@@ -6,7 +6,30 @@
   NODE_VERSION = "20"
   NPM_CONFIG_PRODUCTION = "false"
 
+# SPA fallback — must come before catch-all header rules
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Long-cache fingerprinted assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Static icons — moderate cache
+[[headers]]
+  for = "/*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# Security & privacy headers for HTML
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "serial=(self), bluetooth=(self), interest-cohort=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"

@@ -31,9 +31,16 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     if (!this.state.error) return this.props.children;
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F4F7FB] p-6 dark:bg-slate-950">
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="flex min-h-screen items-center justify-center bg-[#F4F7FB] p-6 dark:bg-slate-950"
+      >
         <div className="fx2-card fx2-outline max-w-md p-6 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+          <div
+            aria-hidden="true"
+            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10"
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-7 w-7 text-red-500">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
@@ -49,18 +56,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
             {this.state.error.message}
           </pre>
           <div className="mt-5 flex justify-center gap-2">
-            <button
-              type="button"
-              onClick={this.handleReset}
-              className="rounded-xl bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
-            >
+            <button type="button" onClick={this.handleReset} className="fx2-btn-primary">
               다시 시도
             </button>
-            <button
-              type="button"
-              onClick={this.handleReload}
-              className="rounded-xl bg-[#EAF0F8] px-4 py-2 text-xs font-semibold text-[#6B7280] hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-            >
+            <button type="button" onClick={this.handleReload} className="fx2-btn-secondary">
               새로고침
             </button>
           </div>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://laxtha.netlify.app/sitemap.xml

@@ -1,15 +1,99 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FX2 Demo Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#2563EB" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0F172A" media="(prefers-color-scheme: dark)" />
+
+    <title>LAXTHA · FX2 실시간 뇌파(EEG) 대시보드</title>
+    <meta
+      name="description"
+      content="OMC-M10 FX2 뇌파(EEG) 장치를 Chrome 브라우저에서 바로 측정하고 시각화합니다. 서버·앱 설치 없이 Web Serial로 연결, 60Hz 실시간 차트와 CSV 내보내기를 지원합니다."
+    />
+    <meta name="keywords" content="FX2, EEG, 뇌파, OMC-M10, LAXTHA, Web Serial, 실시간 측정, 대시보드" />
+    <meta name="author" content="LAXTHA" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://laxtha.netlify.app/live" />
+
+    <!-- Icons / PWA -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Open Graph / Twitter -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LAXTHA FX2 Dashboard" />
+    <meta property="og:title" content="LAXTHA · FX2 실시간 뇌파(EEG) 대시보드" />
+    <meta
+      property="og:description"
+      content="Chrome에서 바로 사용하는 FX2 뇌파 실시간 측정. Web Serial 기반, 60Hz 실시간 차트, CSV 내보내기."
+    />
+    <meta property="og:url" content="https://laxtha.netlify.app/live" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:image" content="https://laxtha.netlify.app/apple-touch-icon.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="LAXTHA · FX2 실시간 뇌파(EEG) 대시보드" />
+    <meta
+      name="twitter:description"
+      content="Chrome에서 바로 사용하는 FX2 뇌파 실시간 측정 대시보드."
+    />
+
+    <!-- Fonts (preconnect + non-blocking load) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      />
+    </noscript>
+
+    <!-- Inline JSON-LD -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "LAXTHA FX2 Dashboard",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Web",
+        "url": "https://laxtha.netlify.app/",
+        "description": "OMC-M10 FX2 뇌파(EEG) 장치를 Chrome 브라우저에서 바로 측정·시각화하는 실시간 대시보드.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" },
+        "publisher": { "@type": "Organization", "name": "LAXTHA" }
+      }
+    </script>
+
+    <!-- Avoid FOUC dark mode flash -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("fx2-dark-mode");
+          if (stored === "true") document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="padding:32px;font-family:system-ui,sans-serif;text-align:center;">
+        <h1>JavaScript가 필요합니다</h1>
+        <p>LAXTHA FX2 대시보드는 실시간 측정을 위해 JavaScript를 사용합니다. 브라우저 설정에서 JavaScript를 허용해 주세요.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

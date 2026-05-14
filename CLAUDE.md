@@ -118,7 +118,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ## 현재 상태 (2026-05-06 기준)
 
-최신 커밋: `6b50196 UX: 15-item feedback pass — reconnect, chart labels, mode toggle, single CTA`
+최신 커밋: `608ca72 fix(EEGChartV2): freeze Y axis between 1s updates to stop plotted values shifting`
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -223,6 +223,13 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] Layout 헤더 다크모드 버튼 lg:hidden (사이드바가 데스크톱 처리)
 - [x] Layout 토스트 — 에러/미지원만 표시 (성공/정보 제거)
 - [x] Layout 홈 nav 항목 제거
+- [x] **[세션9]** EEGChartV2 Y축 freeze — `auto:false` + `setScale("y")` 최대 1Hz → 이미 찍힌 값이 스크롤 시 이동하는 현상 해소
+- [x] **[세션9]** LivePage 측정중 연결해제 버튼 제거 (레이아웃 shift 방지)
+- [x] **[세션9]** Bluetooth COM 재연결 race condition 수정 — disconnect() 후 300ms 대기
+- [x] **[세션9]** LineChartCard fill(스플라인) 제거 — series 오직 선만 표시
+- [x] **[세션9]** MAX_RENDER_POINTS 600→3600, setData(false) — downsampling 노이즈 제거
+- [x] **[세션10]** EEGChartV2 smoothArr centered MA → causal MA(win=7) — 라이브 엣지 플러터 수정 (마지막 3점 비대칭 평균 문제)
+- [x] **[세션10]** EEGChartV2 Y스케일 P2/P98 percentile + rate-limit 200ms(5Hz) + EMA α=0.04→0.25 — ADC 불량 후 ±600 고착 문제 해소
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 연결 검증** — PPD=1 수신, BPM/RR 정상값, 차트 시간창 timestamp 확인

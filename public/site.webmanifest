@@ -1,0 +1,15 @@
+{
+  "name": "LAXTHA — FX2 EEG Dashboard",
+  "short_name": "LAXTHA",
+  "description": "Chrome 브라우저에서 바로 사용하는 FX2 뇌파(EEG) 실시간 측정 대시보드",
+  "lang": "ko",
+  "start_url": "/live",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F7FB",
+  "theme_color": "#2563EB",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/apple-touch-icon.svg", "sizes": "180x180", "type": "image/svg+xml" }
+  ]
+}

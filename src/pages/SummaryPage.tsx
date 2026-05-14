@@ -277,68 +277,45 @@ export default function SummaryPage() {
         </dl>
 
         {recorderSummary.hasRecording ? (
-          <>
-            <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800/40 dark:bg-emerald-500/5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-700 dark:text-emerald-400">
-                기록된 데이터
-              </p>
-              <p className="mt-1.5 text-xs text-[#6B7280] dark:text-slate-400">
-                {recorderSummary.sampleCount.toLocaleString()}샘플 · 차트에서 사라진 데이터도 포함됩니다
-              </p>
-              <p className="mt-0.5 text-xs text-[#9CA3AF] dark:text-slate-500">
-                CSV≈{formatBytes(recorderSummary.sampleCount * 100 + 600)} · JSON≈{formatBytes(recorderSummary.sampleCount * 160 + 200)}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  CSV 저장
-                </button>
-                <button
-                  type="button"
-                  onClick={exportJson}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  JSON 저장
-                </button>
-              </div>
+          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800/40 dark:bg-emerald-500/5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-700 dark:text-emerald-400">
+              기록된 데이터
+            </p>
+            <p className="mt-1.5 text-xs text-[#6B7280] dark:text-slate-400">
+              {recorderSummary.sampleCount.toLocaleString()}샘플 · 차트에서 사라진 데이터도 포함됩니다
+            </p>
+            <p className="mt-0.5 text-xs text-[#9CA3AF] dark:text-slate-500">
+              CSV≈{formatBytes(recorderSummary.sampleCount * 100 + 600)} · JSON≈{formatBytes(recorderSummary.sampleCount * 160 + 200)}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                CSV 저장
+              </button>
+              <button
+                type="button"
+                onClick={exportJson}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                JSON 저장
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  openLaxthaGpt();
+                  exportJson();
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                aria-label="JSON 다운로드 후 LAXTHA 뇌파 브리핑 GPT를 새 탭에서 열기"
+                title="JSON 자동 다운로드 + GPT 새 탭으로 열기"
+              >
+                🤖 GPT로 분석
+              </button>
             </div>
-
-            <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-800/40 dark:bg-violet-500/5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-violet-700 dark:text-violet-300">
-                AI 분석 · ChatGPT
-              </p>
-              <p className="mt-1.5 text-sm font-semibold text-[#111827] dark:text-white">
-                🤖 LAXTHA 뇌파 브리핑
-              </p>
-              <p className="mt-1 text-xs leading-5 text-[#6B7280] dark:text-slate-400">
-                JSON을 GPT에 올리면 측정 결과를 친근하게 풀어 설명해 드려요. (의료 진단 아님)
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    openLaxthaGpt();
-                    exportJson();
-                  }}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                  aria-label="JSON을 다운로드하고 LAXTHA 뇌파 브리핑 GPT를 새 탭에서 열기"
-                >
-                  🤖 GPT로 분석
-                </button>
-                <button
-                  type="button"
-                  onClick={openLaxthaGpt}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#EAF0F8] px-3 py-2 text-xs font-semibold text-[#374151] transition-colors duration-200 hover:bg-[#111827] hover:text-white dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  aria-label="LAXTHA 뇌파 브리핑 GPT만 새 탭에서 열기"
-                >
-                  GPT만 열기
-                </button>
-              </div>
-            </div>
-          </>
+          </div>
         ) : null}
 
         <div className="mt-6 grid gap-2">

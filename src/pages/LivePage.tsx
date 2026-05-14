@@ -190,15 +190,6 @@ function CompactStatusItem({
   );
 }
 
-function FeatureChip({ children }: { children: ReactNode }) {
-  return (
-    <li className="flex items-center gap-2 rounded-full bg-white/70 px-3 py-1.5 text-xs font-medium text-[#374151] ring-1 ring-[#E5EBF4] backdrop-blur dark:bg-slate-800/70 dark:text-slate-200 dark:ring-slate-700">
-      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#2563EB]" aria-hidden="true" />
-      {children}
-    </li>
-  );
-}
-
 export default function LivePage() {
   const {
     state,
@@ -222,7 +213,6 @@ export default function LivePage() {
   const [ch1Visible, setCh1Visible] = useState(true);
   const [ch2Visible, setCh2Visible] = useState(true);
   const [showCharts, setShowCharts] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
@@ -262,8 +252,6 @@ export default function LivePage() {
     };
   }, [showHelp]);
 
-  const logContainerRef = useRef<HTMLUListElement | null>(null);
-  const logPinnedRef = useRef(true);
   const prevPhaseRef = useRef(sessionPhase);
   const sessionStartTsRef = useRef<number | null>(null);
   const prevTimestampLengthRef = useRef(state.timestamps.length);
@@ -333,11 +321,6 @@ export default function LivePage() {
     appendSample,
   ]);
 
-  const visibleLogs = useMemo(
-    () => state.logs.slice().reverse().slice(0, 10),
-    [state.logs]
-  );
-
   const chartSeries = useMemo(() => {
     const n = Math.min(state.ch1.length, state.ch2.length, state.timestamps.length);
     if (
@@ -354,17 +337,6 @@ export default function LivePage() {
     };
   }, [state.ch1, state.ch2, state.timestamps]);
 
-  useEffect(() => {
-    if (!logPinnedRef.current) return;
-    logContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [visibleLogs]);
-
-  const handleLogScroll = () => {
-    const node = logContainerRef.current;
-    if (!node) return;
-    logPinnedRef.current = node.scrollTop <= 12;
-  };
-
   const isRunning = sessionPhase === "running";
   const isStopped = sessionPhase === "stopped";
   const isConnected = hardwareStatus === "connected";
@@ -376,96 +348,18 @@ export default function LivePage() {
     hardwareStatus === "idle" || hasError || isUnsupported;
 
   const hasLiveData = state.stats.sampleCount > 0;
-  const showOnboarding = !isRunning && !hasLiveData && !isStopped;
 
   const handleReload = () => window.location.reload();
 
   return (
     <div className="flex flex-col gap-5">
-      {showOnboarding ? (
-        <section
-          aria-labelledby="onboarding-title"
-          className="fx2-card fx2-outline relative overflow-hidden border-l-4 border-l-[#2563EB] !p-6 sm:!p-8"
+      {isUnsupported ? (
+        <div
+          role="alert"
+          className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300"
         >
-          <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-gradient-to-br from-[#2563EB]/15 to-[#06B6D4]/10 blur-2xl" aria-hidden="true" />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#2563EB]">
-                LAXTHA FX2 EEG
-              </p>
-              <h2
-                id="onboarding-title"
-                className="mt-2 text-2xl font-bold leading-tight tracking-tight text-[#111827] dark:text-white sm:text-3xl"
-              >
-                서버 없이, Chrome에서 바로 시작하는 실시간 뇌파 측정
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-[#6B7280] dark:text-slate-400">
-                OMC-M10 장치를 Bluetooth SPP 또는 USB로 연결하면 60Hz 라이브 차트, 심박·신호 품질·전극 상태가 즉시 표시됩니다. 측정 종료 후 CSV / JSON으로 내보낼 수 있습니다.
-              </p>
-              <ul className="mt-4 flex flex-wrap gap-2">
-                <FeatureChip>Web Serial · 서버 불필요</FeatureChip>
-                <FeatureChip>60Hz 실시간 차트</FeatureChip>
-                <FeatureChip>CSV / JSON 내보내기</FeatureChip>
-                <FeatureChip>다크 모드</FeatureChip>
-              </ul>
-            </div>
-
-            <div className="flex flex-col gap-2 lg:items-end">
-              {isUnsupported ? (
-                <div className="rounded-2xl bg-red-50 px-4 py-3 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300">
-                  이 브라우저는 Web Serial을 지원하지 않습니다.
-                  <br />
-                  <span className="font-semibold">Chrome 또는 Edge</span>에서 다시 열어 주세요.
-                </div>
-              ) : needsReload ? (
-                <button
-                  type="button"
-                  onClick={handleReload}
-                  className="fx2-btn-primary !px-5 !py-2.5 !text-sm"
-                  aria-describedby="onboarding-help"
-                >
-                  🔄 페이지 새로고침
-                </button>
-              ) : isConnecting ? (
-                <button type="button" disabled className="fx2-btn-primary cursor-wait">
-                  <span className="h-2 w-2 animate-ping rounded-full bg-white/80" />
-                  연결 중…
-                </button>
-              ) : canConnect ? (
-                <button
-                  type="button"
-                  onClick={() => void connectDevice()}
-                  className="fx2-btn-primary !px-5 !py-2.5 !text-sm"
-                  aria-describedby="onboarding-help"
-                >
-                  장치 연결하기
-                </button>
-              ) : isConnected ? (
-                <button
-                  type="button"
-                  onClick={startSession}
-                  className="fx2-btn-primary !px-5 !py-2.5 !text-sm"
-                >
-                  ▶ 측정 시작
-                </button>
-              ) : null}
-
-              <p
-                id="onboarding-help"
-                className="max-w-xs text-right text-[11px] leading-5 text-[#6B7280] dark:text-slate-500"
-              >
-                {needsReload
-                  ? "장치 연결이 한 번 해제되어 안정적인 재연결을 위해 페이지 새로고침이 필요합니다."
-                  : "Bluetooth SPP COM 포트 또는 USB 시리얼을 선택해 주세요. HTTPS·Chrome 환경에서만 작동합니다."}
-              </p>
-              {hasError && !needsReload ? (
-                <p className="text-right text-[11px] text-red-600 dark:text-red-400">
-                  마지막 연결 실패: 다시 시도해 주세요.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </section>
+          이 브라우저는 Web Serial을 지원하지 않습니다. <span className="font-semibold">Chrome 또는 Edge</span>에서 다시 열어 주세요.
+        </div>
       ) : null}
 
       {/* Status cards */}
@@ -596,8 +490,8 @@ export default function LivePage() {
                 : "장치 대기"}
             </span>
 
-            {/* During onboarding the hero owns the primary CTA — avoid duplicating it here */}
-            {showOnboarding ? null : isConnecting ? (
+            {/* Single primary CTA in the status bar — no duplicate hero */}
+            {isConnecting ? (
               <button type="button" disabled className="fx2-btn-secondary cursor-wait">
                 연결 중…
               </button>
@@ -699,61 +593,24 @@ export default function LivePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={clearRecording}
-                  disabled={recorderSummary.isRecording}
-                  className="fx2-btn-secondary disabled:opacity-40"
-                >
-                  기록 초기화
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section
-            aria-labelledby="gpt-title"
-            className="fx2-card fx2-outline relative overflow-hidden border-l-4 border-l-violet-500"
-          >
-            <div
-              className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br from-violet-400/15 to-fuchsia-400/10 blur-2xl"
-              aria-hidden="true"
-            />
-            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="max-w-xl">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-violet-600 dark:text-violet-300">
-                  AI 분석 · ChatGPT
-                </p>
-                <h2 id="gpt-title" className="fx2-title mt-1">
-                  🤖 LAXTHA 뇌파 브리핑으로 분석하기
-                </h2>
-                <p className="mt-1.5 text-xs leading-5 text-[#6B7280] dark:text-slate-400">
-                  버튼을 누르면 JSON이 다운로드되고 GPT가 새 탭으로 열립니다.
-                  다운로드된 파일을 GPT 대화창에 끌어놓으면 측정 결과를 친근하게 풀어 설명해 드려요.
-                </p>
-                <p className="mt-1 text-[11px] text-[#9CA3AF] dark:text-slate-500">
-                  ※ 건강 정보 참고용이며, 의료 진단을 대체하지 않습니다.
-                </p>
-              </div>
-              <div className="flex flex-shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
                   onClick={() => {
                     openLaxthaGpt();
                     exportJson();
                   }}
                   disabled={recorderSummary.isRecording}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-violet-700 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="JSON 다운로드 후 LAXTHA 뇌파 브리핑 GPT를 새 탭에서 엽니다"
+                  title="JSON 자동 다운로드 + GPT 새 탭으로 열기"
                 >
                   🤖 GPT로 분석
                 </button>
                 <button
                   type="button"
-                  onClick={openLaxthaGpt}
-                  className="fx2-btn-secondary"
-                  aria-label="LAXTHA 뇌파 브리핑 GPT만 새 탭에서 열기"
-                  title="이미 JSON 파일이 있다면 GPT만 열기"
+                  onClick={clearRecording}
+                  disabled={recorderSummary.isRecording}
+                  className="fx2-btn-secondary disabled:opacity-40"
                 >
-                  GPT만 열기
+                  기록 초기화
                 </button>
               </div>
             </div>
@@ -789,7 +646,7 @@ export default function LivePage() {
         </p>
       </div>
 
-      {/* Secondary charts + diagnostics toggle */}
+      {/* Secondary charts toggle */}
       <div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
@@ -800,16 +657,6 @@ export default function LivePage() {
             className="fx2-btn-secondary"
           >
             {showCharts ? "보조 차트 숨기기 ▲" : "보조 차트 보기 ▼"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDiagnostics((v) => !v)}
-            aria-expanded={showDiagnostics}
-            aria-controls="diagnostics-panel"
-            className="fx2-btn-secondary"
-            title="신호 품질 점검용 진단 데이터"
-          >
-            {showDiagnostics ? "진단 데이터 숨기기 ▲" : "진단 데이터 보기 ▼"}
           </button>
           <button
             type="button"
@@ -858,59 +705,6 @@ export default function LivePage() {
               label="EEG 파워"
               description="뇌파 전체 에너지(파워 스펙트럼). 약 2초마다 갱신됩니다."
             />
-          </div>
-        ) : null}
-
-        {showDiagnostics ? (
-          <div
-            id="diagnostics-panel"
-            className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${showCharts ? "mt-3" : ""}`}
-          >
-            <LineChartCard
-              values={secondary.pc}
-              timestamps={secondary.timestamps}
-              color="#0EA5E9"
-              label="PC 프레임 카운터"
-              description="0–31 순환. 통신 손실 시 건너뜀이 발생합니다. (진단용)"
-            />
-            <LineChartCard
-              values={secondary.pcStep}
-              timestamps={secondary.timestamps}
-              color="#F97316"
-              label="PC 프레임 간격"
-              description="연속 프레임 간 step 값. 1이 정상, 2 이상이면 드롭 발생. (진단용)"
-            />
-            <section className="fx2-card fx2-outline">
-              <div>
-                <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">
-                  이벤트 로그
-                </h2>
-                <p className="mt-0.5 text-[10px] leading-4 text-[#9CA3AF] dark:text-slate-500">
-                  착용·신호 상태가 바뀐 시점이 기록됩니다.
-                </p>
-              </div>
-              <ul
-                ref={logContainerRef}
-                onScroll={handleLogScroll}
-                aria-label="이벤트 로그"
-                className="mt-2 max-h-[120px] space-y-1.5 overflow-y-auto pr-1"
-              >
-                {visibleLogs.length > 0 ? (
-                  visibleLogs.map((log, index) => (
-                    <li
-                      key={`${log}-${index}`}
-                      className="fx2-surface rounded-xl px-3 py-1.5 text-xs leading-5 text-[#6B7280] dark:text-slate-300"
-                    >
-                      {log}
-                    </li>
-                  ))
-                ) : (
-                  <li className="fx2-surface rounded-xl px-3 py-2 text-xs text-[#6B7280] dark:text-slate-400">
-                    아직 기록된 이벤트가 없습니다.
-                  </li>
-                )}
-              </ul>
-            </section>
           </div>
         ) : null}
       </div>

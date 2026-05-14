@@ -209,8 +209,14 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   );
   const wearStatus = toWearStatus(message.wearing, message.noise);
   const signalStatus = toSignalStatus(message.signalQuality);
-  const sessionStartedAt = prev.sessionStartedAt ?? new Date(nextTimestamp).toISOString();
+  // sessionStartedAt is set by startSession() to the wall-clock moment recording begins.
+  // We intentionally do NOT derive it from nextTimestamp because hardware burst frames
+  // can carry timestamps slightly ahead of wall clock — that would inflate sessionSeconds.
+  const sessionStartedAt = prev.sessionStartedAt ?? new Date().toISOString();
   const sessionStartedAtMs = Date.parse(sessionStartedAt);
+  // Session timer is wall-clock based — independent of frame timestamps, so it stays
+  // accurate regardless of how fast the device pushes samples.
+  const wallClockNowMs = Date.now();
   const nextSampleCount = prev.stats.sampleCount + 1;
   const averageHeartRate =
     (prev.stats.averageHeartRate * prev.stats.sampleCount + message.bpm) /
@@ -257,10 +263,10 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     ),
     sessionSeconds: Math.max(
       0,
-      Math.floor((nextTimestamp - sessionStartedAtMs) / 1000)
+      Math.floor((wallClockNowMs - sessionStartedAtMs) / 1000)
     ),
     sessionStartedAt,
-    lastUpdated: new Date(nextTimestamp).toISOString(),
+    lastUpdated: new Date(wallClockNowMs).toISOString(),
     logs: (() => {
       const isFirstSample = prev.stats.sampleCount === 0;
       const wearChanged = prev.wearStatus !== wearStatus;

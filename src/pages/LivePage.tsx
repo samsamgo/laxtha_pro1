@@ -196,7 +196,6 @@ export default function LivePage() {
     sessionPhase,
     hardwareStatus,
     recorderSummary,
-    needsReload,
     connectDevice,
     disconnectDevice,
     startSession,
@@ -224,6 +223,21 @@ export default function LivePage() {
     setIsStopping(true);
     stopSession();
     setTimeout(() => setIsStopping(false), 600);
+  };
+
+  // Disconnect + reload in one step.
+  // Web Serial can't reliably reopen Bluetooth SPP COM ports without a page reset,
+  // so disconnect always triggers a reload after the user confirms.
+  const requestDisconnect = () => {
+    const confirmed = window.confirm(
+      "장치 연결을 해제하고 페이지를 새로고침합니다.\n\n" +
+      "• 화면에 표시 중인 측정 데이터는 사라집니다.\n" +
+      "• 저장하지 않은 CSV / JSON이 있다면 먼저 내보내 주세요.\n\n" +
+      "계속하시겠습니까?"
+    );
+    if (!confirmed) return;
+    disconnectDevice();
+    window.location.reload();
   };
 
   // Open help modal on '?' key
@@ -348,8 +362,6 @@ export default function LivePage() {
     hardwareStatus === "idle" || hasError || isUnsupported;
 
   const hasLiveData = state.stats.sampleCount > 0;
-
-  const handleReload = () => window.location.reload();
 
   return (
     <div className="flex flex-col gap-5">
@@ -490,19 +502,10 @@ export default function LivePage() {
                 : "장치 대기"}
             </span>
 
-            {/* Single primary CTA in the status bar — no duplicate hero */}
+            {/* Single primary CTA in the status bar */}
             {isConnecting ? (
               <button type="button" disabled className="fx2-btn-secondary cursor-wait">
                 연결 중…
-              </button>
-            ) : needsReload ? (
-              <button
-                type="button"
-                onClick={handleReload}
-                className="fx2-btn-primary"
-                title="안정적인 재연결을 위해 페이지를 새로고침합니다"
-              >
-                🔄 페이지 새로고침
               </button>
             ) : canConnect ? (
               <button
@@ -519,8 +522,9 @@ export default function LivePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={disconnectDevice}
+                  onClick={requestDisconnect}
                   className="fx2-btn-secondary"
+                  title="연결을 해제하고 페이지를 새로고침합니다"
                 >
                   연결 해제
                 </button>

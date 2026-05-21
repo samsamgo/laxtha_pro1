@@ -300,6 +300,7 @@ export default function LivePage() {
     for (let index = previousLength; index < state.timestamps.length; index++) {
       const ts = state.timestamps[index];
       const startTs = sessionStartTsRef.current ?? ts;
+      const rrInterval = state.rrInterval[index];
       appendSample({
         timestamp: new Date(ts).toISOString(),
         elapsedMs: Math.max(0, ts - startTs),
@@ -309,7 +310,7 @@ export default function LivePage() {
         bpm: state.bpmSamples[index] ?? state.heartRate,
         ppg: state.ppg[index] ?? 0,
         sdppg: state.sdppg[index] ?? 0,
-        rrInterval: state.rrInterval[index] ?? 0,
+        rrInterval: Number.isFinite(rrInterval) ? rrInterval : 0,
         powerSpectrum: state.powerSpectrum[index] ?? 0,
         wear: state.wearSamples[index] ?? state.wearStatus,
         signal: state.signalSamples[index] ?? state.signalStatus,

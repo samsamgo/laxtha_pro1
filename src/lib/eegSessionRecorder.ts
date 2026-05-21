@@ -39,7 +39,10 @@ export class EegSessionRecorder {
 
   appendSample(sample: EegSample): void {
     if (!this.recording) return;
-    this.samples.push(sample);
+    this.samples.push({
+      ...sample,
+      rrInterval: Number.isFinite(sample.rrInterval) ? sample.rrInterval : 0,
+    });
   }
 
   appendFftEpoch(epoch: FftEpoch): void {

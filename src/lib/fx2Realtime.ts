@@ -222,7 +222,7 @@ export const parseUartBinaryFrame = (
   const ch2Saturation = currentPcdBuffer[21];
   const saturationNoise = isSaturated(ch1Saturation) || isSaturated(ch2Saturation);
   const rrRaw = frame.ch6Raw;
-  const rrInterval = ppgValid && rrRaw >= 250 && rrRaw <= 2000 ? rrRaw : 0;
+  const rrInterval = ppgValid && rrRaw >= 250 && rrRaw <= 2000 ? rrRaw : Number.NaN;
   const powerSpectrum = frame.ch3Raw / 10;
 
   const noise = !frame.ppd || !wearing || !eegValid || !ppgValid || saturationNoise;

@@ -5,6 +5,7 @@ import {
   FFT_FREQUENCY_RESOLUTION_HZ,
   type FftEpoch,
 } from "./fftAccumulator";
+import { KST_TIMEZONE, toKstIso } from "./timeFormat";
 
 export class EegSessionRecorder {
   private samples: EegSample[] = [];
@@ -58,8 +59,8 @@ export class EegSessionRecorder {
 
     return {
       isRecording: this.recording,
-      startedAt: this.startedAt ? new Date(this.startedAt).toISOString() : null,
-      endedAt: this.endedAt ? new Date(this.endedAt).toISOString() : null,
+      startedAt: this.startedAt ? toKstIso(this.startedAt) : null,
+      endedAt: this.endedAt ? toKstIso(this.endedAt) : null,
       durationMs,
       sampleCount: this.samples.length,
       hasRecording: this.samples.length > 0,
@@ -77,12 +78,13 @@ export class EegSessionRecorder {
       `# FX2 EEG Session Export`,
       `# Device: FX2 Web Serial`,
       `# Mode: ${this.sessionMode}`,
-      `# Started: ${new Date(startTs).toISOString()}`,
-      `# Ended: ${new Date(endTs).toISOString()}`,
+      `# Started: ${toKstIso(startTs)}`,
+      `# Ended: ${toKstIso(endTs)}`,
+      `# Timezone: ${KST_TIMEZONE} (+09:00)`,
       `# Duration: ${(durationMs / 1000).toFixed(1)}s`,
       `# Samples: ${this.samples.length}`,
       `# Note: All recorded samples are included — includes data no longer visible on chart`,
-      `# Exported: ${new Date().toISOString()}`,
+      `# Exported: ${toKstIso(Date.now())}`,
     ].join("\n");
 
     const header =
@@ -128,8 +130,10 @@ export class EegSessionRecorder {
       fftFrequencyResolutionHz: FFT_FREQUENCY_RESOLUTION_HZ,
       fftBins: FFT_BIN_COUNT,
       bandIndices: FFT_BAND_INDICES,
-      startedAt: new Date(startTs).toISOString(),
-      endedAt: new Date(endTs).toISOString(),
+      startedAt: toKstIso(startTs),
+      endedAt: toKstIso(endTs),
+      timezone: KST_TIMEZONE,
+      timezoneOffset: "+09:00",
       durationMs: endTs - startTs,
       channels: [
         "pc",

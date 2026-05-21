@@ -11,6 +11,7 @@ import LineChartCard from "../components/LineChartCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
 import { openLaxthaGpt } from "../lib/external";
+import { toKstIso } from "../lib/timeFormat";
 import type { ExtWindowSeconds } from "../types/eegRecorder";
 
 const formatDuration = (seconds: number) => {
@@ -302,7 +303,7 @@ export default function LivePage() {
       const startTs = sessionStartTsRef.current ?? ts;
       const rrInterval = state.rrInterval[index];
       appendSample({
-        timestamp: new Date(ts).toISOString(),
+        timestamp: toKstIso(ts),
         elapsedMs: Math.max(0, ts - startTs),
         pc: state.pc[index] ?? 0,
         ch1: state.ch1[index] ?? 0,

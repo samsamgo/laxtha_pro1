@@ -48,6 +48,8 @@ export interface EegSessionExport {
   bandIndices: Record<string, [number, number]>;
   startedAt: string;
   endedAt: string;
+  timezone: string;
+  timezoneOffset: string;
   durationMs: number;
   channels: string[];
   sampleCount: number;

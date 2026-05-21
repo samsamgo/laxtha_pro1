@@ -7,6 +7,7 @@ import type {
   SignalStatus,
   WearStatus,
 } from "../types/fx2";
+import { toKstIso } from "./timeFormat";
 
 export const MAX_CHART_POINTS = 300000; // 20 min at 250 Hz hardware (memory ~= 24MB across all arrays)
 
@@ -86,7 +87,7 @@ export const toSignalStatus = (quality: number): SignalStatus => {
 };
 
 export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => {
-  const startedAt = new Date().toISOString();
+  const startedAt = toKstIso(Date.now());
 
   return {
     mode,
@@ -232,7 +233,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   // sessionStartedAt is set by startSession() to the wall-clock moment recording begins.
   // We intentionally do NOT derive it from nextTimestamp because hardware burst frames
   // can carry timestamps slightly ahead of wall clock — that would inflate sessionSeconds.
-  const sessionStartedAt = prev.sessionStartedAt ?? new Date().toISOString();
+  const sessionStartedAt = prev.sessionStartedAt ?? toKstIso(Date.now());
   const sessionStartedAtMs = Date.parse(sessionStartedAt);
   // Session timer is wall-clock based — independent of frame timestamps, so it stays
   // accurate regardless of how fast the device pushes samples.
@@ -309,7 +310,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
       Math.floor((wallClockNowMs - sessionStartedAtMs) / 1000)
     ),
     sessionStartedAt,
-    lastUpdated: new Date(wallClockNowMs).toISOString(),
+    lastUpdated: toKstIso(wallClockNowMs),
     logs: (() => {
       const isFirstSample = prev.stats.sampleCount === 0;
       const wearChanged = prev.wearStatus !== wearStatus;

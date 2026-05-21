@@ -710,12 +710,6 @@ export default function LivePage() {
               label="혈류 미분 (sdPPG, au)"
               description="PPG의 변화율. 혈관 탄성·수축 강도 추정에 사용됩니다."
             />
-            <LineChartCard
-              values={secondary.rrInterval}
-              color="#8B5CF6"
-              label="심박 간격 (RR, ms)"
-              description="심박 간 시간 간격. HRV(자율신경) 계산의 기본 입력값입니다."
-            />
           </div>
         ) : null}
       </div>

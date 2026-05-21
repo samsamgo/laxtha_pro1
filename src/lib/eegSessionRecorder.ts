@@ -84,11 +84,12 @@ export class EegSessionRecorder {
       `# Duration: ${(durationMs / 1000).toFixed(1)}s`,
       `# Samples: ${this.samples.length}`,
       `# Note: All recorded samples are included — includes data no longer visible on chart`,
+      `# power_spectrum_raw_div10: CH3 raw byte pair / 10 per LXD141 §Power Spectrum (CH3); time-series of n-indexed bins, not band power`,
       `# Exported: ${toKstIso(Date.now())}`,
     ].join("\n");
 
     const header =
-      "timestamp,elapsed_ms,pc,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode,heartbeat_event,ch1_saturation,ch2_saturation,battery_percent,eeg_valid,ppg_valid";
+      "timestamp,elapsed_ms,pc,ch1_uv,ch2_uv,bpm,ppg_au,sdppg_au,rr_interval_ms,power_spectrum_raw_div10,wear,signal,mode,heartbeat_event,ch1_saturation,ch2_saturation,battery_percent,eeg_valid,ppg_valid";
     const rows = this.samples.map(
       (s) => {
         const nullable = (value: number | null) => value === null ? "" : String(value);
@@ -142,10 +143,13 @@ export class EegSessionRecorder {
         "ch1_uv",
         "ch2_uv",
         "bpm",
-        "ppg",
-        "sdppg",
+        "ppg_au",
+        "sdppg_au",
         "rr_interval_ms",
-        "power_spectrum",
+        "power_spectrum_raw_div10",
+        "wear",
+        "signal",
+        "mode",
         "heartbeat_event",
         "ch1_saturation",
         "ch2_saturation",

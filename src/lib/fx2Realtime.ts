@@ -156,45 +156,6 @@ export const buildMessageFromState = (
 });
 
 
-export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
-  const timestamp = Date.now();
-  const sampleIndex = prev.stats.sampleCount + 1;
-  const baseline = prev.heartRate + (Math.random() - 0.5) * 3;
-  const bpm = Math.max(58, Math.min(108, Math.round(baseline)));
-  const wearing = sampleIndex % 29 !== 0;
-  const noise = sampleIndex % 13 === 0 || !wearing;
-  const signalQuality = Math.max(
-    18,
-    Math.min(99, Math.round((noise ? 42 : 88) + (Math.random() - 0.5) * 10))
-  );
-  const drift = sampleIndex / 4;
-
-  return {
-    mode: prev.mode,
-    ch1: Math.sin(drift) * 1.8 + (Math.random() - 0.5) * 0.3,
-    ch2: Math.cos(drift * 0.84) * 1.55 + (Math.random() - 0.5) * 0.28,
-    bpm,
-    wearing,
-    signalQuality,
-    connection: "connected",
-    noise,
-    timestamp,
-    pc: sampleIndex % 32,
-    ppg: Math.sin(drift * 1.1) * 0.5 + (Math.random() - 0.5) * 0.1,
-    sdppg: Math.cos(drift * 1.3) * 0.3 + (Math.random() - 0.5) * 0.05,
-    rrInterval: bpm > 0 ? Math.round(60000 / bpm) : 833,
-    powerSpectrum: Math.abs(Math.sin(drift * 0.05)) * 80 + 100 + Math.random() * 5,
-    electrodeStatus: wearing ? 0x38 : 0x00,
-    pcd: 0,
-    batteryPercent: 85,
-    ch1Saturation: 128,
-    ch2Saturation: 128,
-    heartbeatEvent: sampleIndex % Math.max(1, Math.round(60 / bpm)) === 0,
-    eegValid: wearing,
-    ppgValid: wearing,
-  };
-};
-
 const EEG_CENTER = 16384;
 const EEG_SCALE = 0.03606;
 const EEG_ELECTRODE_MASK = 0x38;

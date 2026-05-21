@@ -51,6 +51,7 @@ export interface EegSessionExport {
   timezone: string;
   timezoneOffset: string;
   durationMs: number;
+  nanPolicy: string;
   channels: string[];
   sampleCount: number;
   samples: EegSample[];

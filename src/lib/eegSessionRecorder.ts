@@ -135,6 +135,8 @@ export class EegSessionRecorder {
       timezone: KST_TIMEZONE,
       timezoneOffset: "+09:00",
       durationMs: endTs - startTs,
+      nanPolicy:
+        "Any NaN value in samples (e.g. EEG with detached electrode) is serialized as null. Use eegValid/ppgValid flags to distinguish.",
       channels: [
         "pc",
         "ch1_uv",
@@ -158,8 +160,11 @@ export class EegSessionRecorder {
     };
 
     try {
+      const jsonReplacer = (_key: string, value: unknown) =>
+        typeof value === "number" && !Number.isFinite(value) ? null : value;
+
       this.downloadBlob(
-        new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+        new Blob([JSON.stringify(data, jsonReplacer, 2)], { type: "application/json" }),
         this.buildFilename("json")
       );
     } catch {

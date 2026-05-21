@@ -700,14 +700,14 @@ export default function LivePage() {
               values={secondary.ppg}
               timestamps={secondary.timestamps}
               color="#10B981"
-              label="혈류 신호 (PPG)"
+              label="혈류 신호 (PPG, au)"
               description="심장 박동에 따라 변하는 빛 흡수량. 맥파 모양을 보여줍니다."
             />
             <LineChartCard
               values={secondary.sdppg}
               timestamps={secondary.timestamps}
               color="#F59E0B"
-              label="혈류 미분 (sdPPG)"
+              label="혈류 미분 (sdPPG, au)"
               description="PPG의 변화율. 혈관 탄성·수축 강도 추정에 사용됩니다."
             />
             <LineChartCard

@@ -716,12 +716,6 @@ export default function LivePage() {
               label="심박 간격 (RR, ms)"
               description="심박 간 시간 간격. HRV(자율신경) 계산의 기본 입력값입니다."
             />
-            <LineChartCard
-              values={secondary.powerSpectrum}
-              color="#EC4899"
-              label="EEG 파워"
-              description="뇌파 전체 에너지(파워 스펙트럼). 약 2초마다 갱신됩니다."
-            />
           </div>
         ) : null}
       </div>

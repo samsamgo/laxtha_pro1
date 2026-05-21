@@ -307,7 +307,8 @@ export default function Layout({ children, title }: LayoutProps) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            role={toast.type === "error" ? "alert" : undefined}
+            role={toast.type === "error" ? "alert" : "status"}
+            aria-live={toast.type === "error" ? "assertive" : "polite"}
             className={`rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ring-1 ${
               toast.type === "success"
                 ? "bg-emerald-500 text-white ring-emerald-400/30"

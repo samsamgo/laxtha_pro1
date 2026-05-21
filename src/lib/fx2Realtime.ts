@@ -53,6 +53,9 @@ const normalizeTimestamp = (previousTimestamp: number | undefined, nextTimestamp
 
 const createEmptyStats = (): Fx2SessionStats => ({
   sampleCount: 0,
+  bpmSampleCount: 0,
+  bpmSum: 0,
+  eegSampleCount: 0,
   averageHeartRate: 0,
   minHeartRate: 0,
   maxHeartRate: 0,
@@ -239,9 +242,6 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   // accurate regardless of how fast the device pushes samples.
   const wallClockNowMs = Date.now();
   const nextSampleCount = prev.stats.sampleCount + 1;
-  const averageHeartRate =
-    (prev.stats.averageHeartRate * prev.stats.sampleCount + message.bpm) /
-    nextSampleCount;
   const averageSignalQuality =
     (prev.stats.averageSignalQuality * prev.stats.sampleCount +
       message.signalQuality) /
@@ -261,8 +261,13 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const batteryPercent = message.batteryPercent ?? pcdBuffer[1] ?? prev.batteryPercent;
   const ch1Saturation = message.ch1Saturation ?? pcdBuffer[20] ?? prev.ch1Saturation;
   const ch2Saturation = message.ch2Saturation ?? pcdBuffer[21] ?? prev.ch2Saturation;
-  const ch1ForStats = Number.isFinite(ch1Value) ? ch1Value : 0;
-  const ch2ForStats = Number.isFinite(ch2Value) ? ch2Value : 0;
+  const bpmCounted = message.ppgValid && message.bpm > 0;
+  const nextBpmSampleCount = prev.stats.bpmSampleCount + (bpmCounted ? 1 : 0);
+  const nextBpmSum = prev.stats.bpmSum + (bpmCounted ? message.bpm : 0);
+  const averageHeartRate = nextBpmSampleCount > 0 ? nextBpmSum / nextBpmSampleCount : 0;
+  const eegCounted =
+    message.eegValid && Number.isFinite(message.ch1) && Number.isFinite(message.ch2);
+  const nextEegSampleCount = prev.stats.eegSampleCount + (eegCounted ? 1 : 0);
 
   return {
     ...prev,
@@ -329,13 +334,20 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     })(),
     stats: {
       sampleCount: nextSampleCount,
+      bpmSampleCount: nextBpmSampleCount,
+      bpmSum: nextBpmSum,
+      eegSampleCount: nextEegSampleCount,
       averageHeartRate: roundToSingleDecimal(averageHeartRate),
       minHeartRate:
-        prev.stats.sampleCount === 0
+        !bpmCounted
+          ? prev.stats.minHeartRate
+          : prev.stats.bpmSampleCount === 0
           ? message.bpm
           : Math.min(prev.stats.minHeartRate, message.bpm),
       maxHeartRate:
-        prev.stats.sampleCount === 0
+        !bpmCounted
+          ? prev.stats.maxHeartRate
+          : prev.stats.bpmSampleCount === 0
           ? message.bpm
           : Math.max(prev.stats.maxHeartRate, message.bpm),
       averageSignalQuality: roundToSingleDecimal(averageSignalQuality),
@@ -346,10 +358,14 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
         prev.stats.unstableMoments + (wearStatus === "unstable" ? 1 : 0),
       notWornMoments:
         prev.stats.notWornMoments + (wearStatus === "not_worn" ? 1 : 0),
-      ch1Sum: prev.stats.ch1Sum + ch1ForStats,
-      ch2Sum: prev.stats.ch2Sum + ch2ForStats,
-      ch1PeakAbs: Math.max(prev.stats.ch1PeakAbs, Math.abs(ch1ForStats)),
-      ch2PeakAbs: Math.max(prev.stats.ch2PeakAbs, Math.abs(ch2ForStats)),
+      ch1Sum: prev.stats.ch1Sum + (eegCounted ? message.ch1 : 0),
+      ch2Sum: prev.stats.ch2Sum + (eegCounted ? message.ch2 : 0),
+      ch1PeakAbs: eegCounted
+        ? Math.max(prev.stats.ch1PeakAbs, Math.abs(message.ch1))
+        : prev.stats.ch1PeakAbs,
+      ch2PeakAbs: eegCounted
+        ? Math.max(prev.stats.ch2PeakAbs, Math.abs(message.ch2))
+        : prev.stats.ch2PeakAbs,
     },
   };
 };
@@ -368,8 +384,9 @@ export interface Fx2SummarySnapshot {
 
 export const summarizeFx2State = (state: Fx2State): Fx2SummarySnapshot => {
   const n = state.stats.sampleCount;
-  const leftChannelAverage = roundToSingleDecimal(n > 0 ? state.stats.ch1Sum / n : 0);
-  const rightChannelAverage = roundToSingleDecimal(n > 0 ? state.stats.ch2Sum / n : 0);
+  const eegN = state.stats.eegSampleCount;
+  const leftChannelAverage = roundToSingleDecimal(eegN > 0 ? state.stats.ch1Sum / eegN : 0);
+  const rightChannelAverage = roundToSingleDecimal(eegN > 0 ? state.stats.ch2Sum / eegN : 0);
   const leftPeak = roundToSingleDecimal(state.stats.ch1PeakAbs);
   const rightPeak = roundToSingleDecimal(state.stats.ch2PeakAbs);
   const balanceGap = roundToSingleDecimal(Math.abs(leftChannelAverage - rightChannelAverage));

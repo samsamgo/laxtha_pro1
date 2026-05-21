@@ -47,6 +47,9 @@ export interface Fx2IncomingMessage {
 
 export interface Fx2SessionStats {
   sampleCount: number;
+  bpmSampleCount: number;
+  bpmSum: number;
+  eegSampleCount: number;
   averageHeartRate: number;
   minHeartRate: number;
   maxHeartRate: number;

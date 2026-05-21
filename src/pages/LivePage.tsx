@@ -397,7 +397,7 @@ export default function LivePage() {
               label="심박수"
               value={hasLiveData ? `${state.heartRate}` : "—"}
               iconClassName="bg-red-50 text-[#EF4444] dark:bg-red-500/10 dark:text-red-300"
-              valueClassName={hasLiveData ? getBpmValueClassName(state.heartRate) : "text-[#9CA3AF] dark:text-slate-600"}
+              valueClassName={hasLiveData ? getBpmValueClassName(state.heartRate) : "text-[#6B7280] dark:text-slate-300"}
             >
               {hasLiveData ? <MiniSparkline values={state.heartRateHistory} color="#EF4444" /> : null}
             </CompactStatusItem>
@@ -408,7 +408,7 @@ export default function LivePage() {
               value={hasLiveData ? wearLabel[state.wearStatus] : "—"}
               iconClassName={
                 !hasLiveData
-                  ? "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                   : state.wearStatus === "worn"
                   ? "bg-green-50 text-[#22C55E] dark:bg-green-500/10 dark:text-green-300"
                   : state.wearStatus === "unstable"
@@ -417,7 +417,7 @@ export default function LivePage() {
               }
               valueClassName={
                 !hasLiveData
-                  ? "text-[#9CA3AF] dark:text-slate-600"
+                  ? "text-[#6B7280] dark:text-slate-300"
                   : state.wearStatus === "worn"
                   ? "text-[#22C55E] dark:text-green-300"
                   : state.wearStatus === "unstable"
@@ -432,7 +432,7 @@ export default function LivePage() {
               value={hasLiveData ? `${state.signalQuality}%` : "—"}
               iconClassName={
                 !hasLiveData
-                  ? "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                   : state.signalStatus === "good"
                   ? "bg-green-50 text-[#22C55E] dark:bg-green-500/10 dark:text-green-300"
                   : state.signalStatus === "normal"
@@ -441,7 +441,7 @@ export default function LivePage() {
               }
               valueClassName={
                 !hasLiveData
-                  ? "text-[#9CA3AF] dark:text-slate-600"
+                  ? "text-[#6B7280] dark:text-slate-300"
                   : state.signalStatus === "good"
                   ? "text-[#22C55E] dark:text-green-300"
                   : state.signalStatus === "normal"
@@ -469,9 +469,9 @@ export default function LivePage() {
               iconClassName={
                 hasLiveData
                   ? "bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-300"
-                  : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
               }
-              valueClassName={hasLiveData ? "text-[#2563EB] dark:text-blue-300" : "text-[#9CA3AF] dark:text-slate-600"}
+              valueClassName={hasLiveData ? "text-[#2563EB] dark:text-blue-300" : "text-[#6B7280] dark:text-slate-300"}
             />
           </div>
 
@@ -485,7 +485,7 @@ export default function LivePage() {
                   : isConnecting
                   ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
                   : isStopped
-                  ? "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                  ? "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
                   : isConnected
                   ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
                   : "bg-[#EAF0F8] text-[#6B7280] dark:bg-slate-800 dark:text-slate-400"
@@ -652,7 +652,7 @@ export default function LivePage() {
           onCh1Toggle={() => setCh1Visible((c) => !c)}
           onCh2Toggle={() => setCh2Visible((c) => !c)}
         />
-        <p className="mt-1 text-center text-[10px] text-[#6B7280] dark:text-slate-500">
+        <p className="mt-1 text-center text-[10px] text-[#6B7280] dark:text-slate-300">
           <span className="sm:hidden">
             <strong>두 손가락 핀치로 줌</strong> · 드래그로 이동 · 시간창 버튼으로 범위 선택
           </span>
@@ -768,7 +768,7 @@ export default function LivePage() {
                   <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     ?
                   </kbd>
-                  <span className="ml-2 text-[11px] text-[#6B7280] dark:text-slate-500">/</span>
+                  <span className="ml-2 text-[11px] text-[#6B7280] dark:text-slate-300">/</span>
                   <kbd className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     Esc
                   </kbd>

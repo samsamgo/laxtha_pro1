@@ -112,7 +112,7 @@ export default function Layout({ children, title }: LayoutProps) {
 
         <div className="border-b border-[#1E293B] p-4">
           <div className="rounded-2xl bg-[#1E293B] p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
               연결 상태
             </p>
             <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-white">
@@ -135,7 +135,7 @@ export default function Layout({ children, title }: LayoutProps) {
         </div>
 
         <nav aria-label="주 내비게이션" className="flex-1 overflow-y-auto p-4">
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
             Navigation
           </p>
           <div className="space-y-1">
@@ -287,11 +287,11 @@ export default function Layout({ children, title }: LayoutProps) {
 
         <footer
           role="contentinfo"
-          className="mt-8 hidden border-t border-gray-100 bg-white/60 px-6 py-5 text-[11px] text-[#6B7280] backdrop-blur transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-500 lg:block"
+          className="mt-8 hidden border-t border-gray-100 bg-white/60 px-6 py-5 text-[11px] text-[#6B7280] backdrop-blur transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300 lg:block"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p>© {new Date().getFullYear()} LAXTHA — FX2 EEG Dashboard. 측정 데이터는 브라우저 메모리에만 저장됩니다.</p>
-            <p className="text-[#9CA3AF] dark:text-slate-600">
+            <p className="text-[#6B7280] dark:text-slate-300">
               Chrome · Edge 권장 · Web Serial API · v1.0
             </p>
           </div>

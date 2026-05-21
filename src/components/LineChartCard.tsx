@@ -244,7 +244,7 @@ function LineChartCard({ values, timestamps, color, label, description }: LineCh
             </p>
           </div>
           {description ? (
-            <p className="mt-0.5 ml-4 text-[10px] leading-4 text-[#9CA3AF] dark:text-slate-500">
+            <p className="mt-0.5 ml-4 text-[10px] leading-4 text-[#6B7280] dark:text-slate-300">
               {description}
             </p>
           ) : null}

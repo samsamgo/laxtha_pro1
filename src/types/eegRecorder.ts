@@ -39,6 +39,9 @@ export interface EegSessionExport {
   samplingRateHz: number;
   eegConversionUvPerDigit: number;
   eegCenter: number;
+  ppgUnit: string;
+  ppgRawRange: [number, number];
+  ppgRawCenter: number;
   bandwidthHz: [number, number];
   fftFrequencyResolutionHz: number;
   fftBins: number;

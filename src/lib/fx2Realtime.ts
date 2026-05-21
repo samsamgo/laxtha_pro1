@@ -13,6 +13,7 @@ export const MAX_CHART_POINTS = 72000; // 4.8 min at 250 Hz hardware; months at 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
 const HARDWARE_TIMESTAMP_STEP_MS = 1000 / 250;
+const PCD_BUFFER_LENGTH = 32;
 // Single-copy append: avoids the double-allocation of [...arr, v].slice()
 const appendValue = <T,>(history: T[], value: T, max: number): T[] => {
   const next = history.length < max ? history.slice() : history.slice(1);
@@ -24,6 +25,21 @@ const roundToSingleDecimal = (value: number) => Math.round(value * 10) / 10;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+
+const createEmptyPcdBuffer = () => Array<number | null>(PCD_BUFFER_LENGTH).fill(null);
+
+const updatePcdBuffer = (
+  buffer: (number | null)[],
+  pc: number,
+  pcd: number
+): (number | null)[] => {
+  const next = buffer.length === PCD_BUFFER_LENGTH ? buffer.slice() : createEmptyPcdBuffer();
+  next[pc & 0x1f] = pcd;
+  return next;
+};
+
+const isSaturated = (value: number | null) =>
+  value !== null && (value <= 16 || value >= 239);
 
 const normalizeTimestamp = (previousTimestamp: number | undefined, nextTimestamp: number) => {
   if (previousTimestamp === undefined) {
@@ -92,12 +108,19 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     heartbeatEvents: [],
     eegValidSamples: [],
     ppgValidSamples: [],
+    batteryPercentSamples: [],
+    ch1SaturationSamples: [],
+    ch2SaturationSamples: [],
     bpmSamples: [],
     wearSamples: [],
     signalSamples: [],
     heartRateHistory: [],
     signalQualityHistory: [],
     heartbeatTimestamps: [],
+    batteryPercent: null,
+    ch1Saturation: null,
+    ch2Saturation: null,
+    pcdBuffer: createEmptyPcdBuffer(),
     sessionSeconds: 0,
     sessionStartedAt: startedAt,
     lastUpdated: startedAt,
@@ -121,6 +144,10 @@ export const buildMessageFromState = (
   noise: patch.noise ?? state.noise,
   pc: patch.pc ?? state.pc[state.pc.length - 1] ?? 0,
   electrodeStatus: patch.electrodeStatus ?? state.electrodeStatus ?? undefined,
+  pcd: patch.pcd,
+  batteryPercent: patch.batteryPercent ?? state.batteryPercent,
+  ch1Saturation: patch.ch1Saturation ?? state.ch1Saturation,
+  ch2Saturation: patch.ch2Saturation ?? state.ch2Saturation,
   heartbeatEvent: patch.heartbeatEvent ?? false,
   eegValid: patch.eegValid ?? state.eegValidSamples[state.eegValidSamples.length - 1] ?? true,
   ppgValid: patch.ppgValid ?? state.ppgValidSamples[state.ppgValidSamples.length - 1] ?? true,
@@ -157,6 +184,10 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
     rrInterval: bpm > 0 ? Math.round(60000 / bpm) : 833,
     powerSpectrum: Math.abs(Math.sin(drift * 0.05)) * 80 + 100 + Math.random() * 5,
     electrodeStatus: wearing ? 0x38 : 0x00,
+    pcd: 0,
+    batteryPercent: 85,
+    ch1Saturation: 128,
+    ch2Saturation: 128,
     heartbeatEvent: sampleIndex % Math.max(1, Math.round(60 / bpm)) === 0,
     eegValid: wearing,
     ppgValid: wearing,
@@ -184,11 +215,16 @@ export const parseUartBinaryFrame = (
   const ppgOk = Boolean(frame.pud0 & 0x04);   // bit2 = PPG signal ok
   const eegValid = (frame.electrodeStatus & EEG_ELECTRODE_MASK) === EEG_ELECTRODE_MASK;
   const ppgValid = Boolean(frame.electrodeStatus & REF_ELECTRODE_MASK) && ppgOk;
+  const currentPcdBuffer = updatePcdBuffer(fallbackState.pcdBuffer, frame.pc, frame.pcd);
+  const batteryPercent = currentPcdBuffer[1];
+  const ch1Saturation = currentPcdBuffer[20];
+  const ch2Saturation = currentPcdBuffer[21];
+  const saturationNoise = isSaturated(ch1Saturation) || isSaturated(ch2Saturation);
   const rrRaw = frame.ch6Raw;
   const rrInterval = ppgValid && rrRaw >= 250 && rrRaw <= 2000 ? rrRaw : 0;
   const powerSpectrum = frame.ch3Raw / 10;
 
-  const noise = !frame.ppd || !wearing || !eegValid || !ppgValid;
+  const noise = !frame.ppd || !wearing || !eegValid || !ppgValid || saturationNoise;
   const bpm = frame.bpm > 0 && ppgValid
     ? clampNumber(frame.bpm, 30, 240)
     : fallbackState.heartRate;
@@ -211,6 +247,10 @@ export const parseUartBinaryFrame = (
     powerSpectrum,
     electrodeStatus: frame.electrodeStatus,
     ppd: frame.ppd,
+    pcd: frame.pcd,
+    batteryPercent,
+    ch1Saturation,
+    ch2Saturation,
     heartbeatEvent: Boolean(frame.pud0 & 0x80),
     eegValid,
     ppgValid,
@@ -252,6 +292,12 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const pcValue = message.pc ?? prev.pc[prev.pc.length - 1] ?? 0;
   const previousPc = prev.pc[prev.pc.length - 1];
   const pcStep = previousPc === undefined ? 1 : (pcValue - previousPc + 32) % 32;
+  const pcdBuffer = message.pcd === undefined
+    ? prev.pcdBuffer
+    : updatePcdBuffer(prev.pcdBuffer, pcValue, message.pcd);
+  const batteryPercent = message.batteryPercent ?? pcdBuffer[1] ?? prev.batteryPercent;
+  const ch1Saturation = message.ch1Saturation ?? pcdBuffer[20] ?? prev.ch1Saturation;
+  const ch2Saturation = message.ch2Saturation ?? pcdBuffer[21] ?? prev.ch2Saturation;
   const ch1ForStats = Number.isFinite(ch1Value) ? ch1Value : 0;
   const ch2ForStats = Number.isFinite(ch2Value) ? ch2Value : 0;
 
@@ -265,6 +311,10 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     signalQuality: message.signalQuality,
     noise: message.noise,
     electrodeStatus: message.electrodeStatus ?? prev.electrodeStatus,
+    batteryPercent,
+    ch1Saturation,
+    ch2Saturation,
+    pcdBuffer,
     ch1: appendValue(prev.ch1, ch1Value, MAX_CHART_POINTS),
     ch2: appendValue(prev.ch2, ch2Value, MAX_CHART_POINTS),
     timestamps: appendValue(prev.timestamps, nextTimestamp, MAX_CHART_POINTS),
@@ -277,6 +327,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     heartbeatEvents: appendValue(prev.heartbeatEvents, message.heartbeatEvent, MAX_CHART_POINTS),
     eegValidSamples: appendValue(prev.eegValidSamples, message.eegValid, MAX_CHART_POINTS),
     ppgValidSamples: appendValue(prev.ppgValidSamples, message.ppgValid, MAX_CHART_POINTS),
+    batteryPercentSamples: appendValue(prev.batteryPercentSamples, batteryPercent, MAX_CHART_POINTS),
+    ch1SaturationSamples: appendValue(prev.ch1SaturationSamples, ch1Saturation, MAX_CHART_POINTS),
+    ch2SaturationSamples: appendValue(prev.ch2SaturationSamples, ch2Saturation, MAX_CHART_POINTS),
     bpmSamples: appendValue(prev.bpmSamples, message.bpm, MAX_CHART_POINTS),
     wearSamples: appendValue(prev.wearSamples, wearStatus, MAX_CHART_POINTS),
     signalSamples: appendValue(prev.signalSamples, signalStatus, MAX_CHART_POINTS),

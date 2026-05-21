@@ -64,7 +64,7 @@ src/
 Demo:     setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
 OMC-M10:  Bluetooth SPP(COM10/AMP-SPP) → Web Serial → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
 
-Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 72000pt (60Hz 20분), heartRateHistory = 180pt, logs = 40건
+Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 72000pt (250Hz 약 4.8분), heartRateHistory = 180pt, logs = 40건
 EegSessionRecorder: 전체 샘플 무제한 보관 (React state 외부), 세션 종료 후 CSV/JSON 내보내기
 ```
 
@@ -89,6 +89,31 @@ EegSessionRecorder: 전체 샘플 무제한 보관 (React state 외부), 세션 
 [18..19] CH6 RR 간격 ms
 ```
 신호 변환: `EEG_μV = (raw - 16384) × 0.03606`  (raw = (high & 0x7F) × 256 + low, 15비트)
+
+### LXD141/LXD142 사양 메모 (세션11)
+
+- 측정 모드(PPD=1)는 250 packets/sec, 4ms 주기이다. UART는 115200 bps, 8N1을 사용한다.
+- PUD0 bit7=심박 이벤트, bit6=착용, bit5=귓불전극 정상, bit4=배터리 OK, bit2=PPG 정상, bit0=2초 Power Spectrum epoch 시작점이다.
+- CRD/PUD2 byte[7] bit5=CH1 전극, bit4=CH2 전극, bit3=REF 전극이다.
+- CH1/CH2 EEG만 `(raw - 16384) * 0.03606` uV로 변환한다. CH4 PPG와 CH5 sdPPG는 EEG 스케일을 적용하지 않고 au 중심값(raw - 16384)을 사용한다.
+- CH6 RR interval은 250~2000ms 범위만 유효하며, 그 외 값은 0으로 기록한다. BPM은 30~240 범위로 제한한다.
+- PCD는 PC 인덱스별 32칸 버퍼로 추적한다. PCD[1]=배터리 %, PCD[20]=좌뇌 EEG 포화도, PCD[21]=우뇌 EEG 포화도이다.
+
+### Power Spectrum (CH3) 분할 규칙
+
+- PUD0.bit0=1 프레임을 epoch 시작점으로 보고 n=0으로 초기화한다.
+- 각 측정 프레임의 CH3 raw / 10 값을 power로 사용한다.
+- n=0~102는 좌뇌 `PS_CH1[m=n]`, n=103~205는 우뇌 `PS_CH2[m=n-103]`에 저장하며, 이후 값은 무시한다.
+- bin m=0은 DC이고, 주파수 해상도는 0.48828125Hz(1/2.048)이다.
+- 대역 인덱스: theta 9~16, alpha 17~24, lBeta 25~30, mBeta 31~40, hBeta 41~61, gamma 62~82. total은 DC를 제외한 m=1~82 합계이다.
+
+### 신호 유효성 규칙
+
+- PPD가 1이 아니면 스트림 샘플은 파서에서 버린다.
+- CH1/CH2/REF 전극 중 하나라도 미부착이면 EEG는 무효이며, 차트에는 CH1/CH2를 NaN으로 넣어 끊김으로 표시한다.
+- PPG 계열 신호는 REF 전극과 PUD0.bit2(PPG 정상)를 기준으로 별도 `ppgValid` 플래그를 기록한다.
+- PCD[20] 또는 PCD[21]이 16 이하 또는 239 이상이면 해당 EEG 채널 포화로 보고 noise 경고를 켠다.
+- CSV/JSON 샘플에는 `eegValid`, `ppgValid`, `heartbeatEvent`, 배터리 %, 좌/우 포화도를 함께 기록한다.
 
 **BLE/Demo (JSON)** — Demo 모드 및 BLE fallback 테스트용
 ```json
@@ -230,6 +255,9 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 - [x] **[세션9]** MAX_RENDER_POINTS 600→3600, setData(false) — downsampling 노이즈 제거
 - [x] **[세션10]** EEGChartV2 smoothArr centered MA → causal MA(win=7) — 라이브 엣지 플러터 수정 (마지막 3점 비대칭 평균 문제)
 - [x] **[세션10]** EEGChartV2 Y스케일 P2/P98 percentile + rate-limit 200ms(5Hz) + EMA α=0.04→0.25 — ADC 불량 후 ±600 고착 문제 해소
+- [x] **[세션11]** 사양 정합성 — 샘플링 60→250Hz, PPG/sdPPG au 단위, RR 250~2000ms 검증, BPM 240, PCD[1/20/21] 추출, 전극 미부착 시 EEG 무효 처리
+- [x] **[세션11]** FFT(Power Spectrum) 복원 — PUD0.bit0 트리거, n=0~205 좌/우뇌 분리, 대역 파워 계산, JSON 내보내기 포함
+- [x] **[세션11]** JSON 내보내기 확장 — fftEpochs/bandIndices/메타데이터 포함, EegSample에 heartbeat/saturation/battery/validity 컬럼 추가
 
 ### 미완료
 - [ ] **[하드웨어] OMC-M10 실기기 연결 검증** — PPD=1 수신, BPM/RR 정상값, 차트 시간창 timestamp 확인

@@ -8,11 +8,11 @@ import type {
   WearStatus,
 } from "../types/fx2";
 
-export const MAX_CHART_POINTS = 72000; // 20 min at 60 Hz hardware; months at 1 Hz demo
+export const MAX_CHART_POINTS = 72000; // 4.8 min at 250 Hz hardware; months at 1 Hz demo
 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;
-const HARDWARE_TIMESTAMP_STEP_MS = 1000 / 60;
+const HARDWARE_TIMESTAMP_STEP_MS = 1000 / 250;
 // Single-copy append: avoids the double-allocation of [...arr, v].slice()
 const appendValue = <T,>(history: T[], value: T, max: number): T[] => {
   const next = history.length < max ? history.slice() : history.slice(1);
@@ -167,8 +167,8 @@ export const parseUartBinaryFrame = (
 
   const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
-  const ppg = (frame.ch4Raw - EEG_CENTER) * EEG_SCALE;
-  const sdppg = (frame.ch5Raw - EEG_CENTER) * EEG_SCALE;
+  const ppg = frame.ch4Raw - EEG_CENTER;
+  const sdppg = frame.ch5Raw - EEG_CENTER;
   const rrInterval = frame.ch6Raw;
   const powerSpectrum = frame.ch3Raw / 10;
 

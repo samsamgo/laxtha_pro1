@@ -24,7 +24,7 @@ import type { DeviceMode, Fx2BinaryFrame, Fx2State } from "../types/fx2";
 
 type SessionPhase = "idle" | "running" | "stopped";
 
-const HARDWARE_SAMPLE_RATE_HZ = 60;
+const HARDWARE_SAMPLE_RATE_HZ = 250;
 const HARDWARE_SAMPLE_INTERVAL_MS = 1000 / HARDWARE_SAMPLE_RATE_HZ;
 const UART_PC_MODULO = 32;
 

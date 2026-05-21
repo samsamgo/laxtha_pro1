@@ -8,7 +8,7 @@ import type {
   WearStatus,
 } from "../types/fx2";
 
-export const MAX_CHART_POINTS = 72000; // 4.8 min at 250 Hz hardware; months at 1 Hz demo
+export const MAX_CHART_POINTS = 300000; // 20 min at 250 Hz hardware (memory ~= 24MB across all arrays)
 
 const METRIC_HISTORY_LIMIT = 180;
 const LOG_HISTORY_LIMIT = 40;

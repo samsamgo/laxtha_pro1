@@ -14,7 +14,7 @@ interface LineChartCardProps {
 
 // Keep a bounded live window without dropping detail from higher sample rates.
 const WINDOW_SECONDS = 60;
-const MAX_POINTS = 7200;
+const MAX_POINTS = 18000;
 const CHART_HEIGHT = 100;
 
 function hasAlignedTimestamps(values: number[], timestamps?: number[]): timestamps is number[] {

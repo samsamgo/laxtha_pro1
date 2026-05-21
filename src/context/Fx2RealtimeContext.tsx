@@ -258,7 +258,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     pendingHardwareRef.current = [];
     fftAccumulatorRef.current.reset();
     recordedFftEpochCountRef.current = 0;
-    setState(createInitialFx2State("serial"));
+    setState(() => createInitialFx2State("serial"));
     setSessionPhase("running");
     recorderRef.current.startRecording("serial");
     setRecorderSummary(recorderRef.current.getSummary());

@@ -12,6 +12,7 @@ import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
 import { openLaxthaGpt } from "../lib/external";
 import { toKstIso } from "../lib/timeFormat";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import type { ExtWindowSeconds } from "../types/eegRecorder";
 
 const formatDuration = (seconds: number) => {
@@ -215,6 +216,8 @@ export default function LivePage() {
   const [showCharts, setShowCharts] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const helpDialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(helpDialogRef, showHelp);
 
   const requestStopSession = () => {
     const confirmed = window.confirm(
@@ -725,7 +728,10 @@ export default function LivePage() {
             if (e.target === e.currentTarget) setShowHelp(false);
           }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+          <div
+            ref={helpDialogRef}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#2563EB]">

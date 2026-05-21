@@ -156,6 +156,20 @@ function TimeIcon() {
   );
 }
 
+function LoadingSpinner() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="h-3.5 w-3.5 animate-spin"
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 interface CompactStatusItemProps {
   icon: ReactNode;
   label: string;
@@ -522,6 +536,7 @@ export default function LivePage() {
             {/* Single primary CTA in the status bar */}
             {isConnecting ? (
               <button type="button" disabled className="fx2-btn-secondary cursor-wait">
+                <LoadingSpinner />
                 연결 중…
               </button>
             ) : canConnect ? (
@@ -553,7 +568,14 @@ export default function LivePage() {
                 onClick={requestStopSession}
                 className="fx2-btn-danger"
               >
-                {isStopping ? "종료 중…" : "■ 측정 종료"}
+                {isStopping ? (
+                  <>
+                    <LoadingSpinner />
+                    종료 중…
+                  </>
+                ) : (
+                  "■ 측정 종료"
+                )}
               </button>
             ) : null}
           </div>

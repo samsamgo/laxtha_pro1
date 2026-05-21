@@ -89,11 +89,15 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     sdppg: [],
     rrInterval: [],
     powerSpectrum: [],
+    heartbeatEvents: [],
+    eegValidSamples: [],
+    ppgValidSamples: [],
     bpmSamples: [],
     wearSamples: [],
     signalSamples: [],
     heartRateHistory: [],
     signalQualityHistory: [],
+    heartbeatTimestamps: [],
     sessionSeconds: 0,
     sessionStartedAt: startedAt,
     lastUpdated: startedAt,
@@ -117,6 +121,9 @@ export const buildMessageFromState = (
   noise: patch.noise ?? state.noise,
   pc: patch.pc ?? state.pc[state.pc.length - 1] ?? 0,
   electrodeStatus: patch.electrodeStatus ?? state.electrodeStatus ?? undefined,
+  heartbeatEvent: patch.heartbeatEvent ?? false,
+  eegValid: patch.eegValid ?? state.eegValidSamples[state.eegValidSamples.length - 1] ?? true,
+  ppgValid: patch.ppgValid ?? state.ppgValidSamples[state.ppgValidSamples.length - 1] ?? true,
   timestamp: patch.timestamp ?? Date.now(),
 });
 
@@ -150,11 +157,16 @@ export const createMockMessage = (prev: Fx2State): Fx2IncomingMessage => {
     rrInterval: bpm > 0 ? Math.round(60000 / bpm) : 833,
     powerSpectrum: Math.abs(Math.sin(drift * 0.05)) * 80 + 100 + Math.random() * 5,
     electrodeStatus: wearing ? 0x38 : 0x00,
+    heartbeatEvent: sampleIndex % Math.max(1, Math.round(60 / bpm)) === 0,
+    eegValid: wearing,
+    ppgValid: wearing,
   };
 };
 
 const EEG_CENTER = 16384;
 const EEG_SCALE = 0.03606;
+const EEG_ELECTRODE_MASK = 0x38;
+const REF_ELECTRODE_MASK = 0x08;
 
 export const parseUartBinaryFrame = (
   frame: Fx2BinaryFrame,
@@ -169,15 +181,18 @@ export const parseUartBinaryFrame = (
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
   const ppg = frame.ch4Raw - EEG_CENTER;
   const sdppg = frame.ch5Raw - EEG_CENTER;
-  const rrInterval = frame.ch6Raw;
+  const ppgOk = Boolean(frame.pud0 & 0x04);   // bit2 = PPG signal ok
+  const eegValid = (frame.electrodeStatus & EEG_ELECTRODE_MASK) === EEG_ELECTRODE_MASK;
+  const ppgValid = Boolean(frame.electrodeStatus & REF_ELECTRODE_MASK) && ppgOk;
+  const rrRaw = frame.ch6Raw;
+  const rrInterval = ppgValid && rrRaw >= 250 && rrRaw <= 2000 ? rrRaw : 0;
   const powerSpectrum = frame.ch3Raw / 10;
 
-  const ppgOk = Boolean(frame.pud0 & 0x04);   // bit2 = PPG signal ok
-  const noise = !frame.ppd || !wearing || !ppgOk;
-  const bpm = frame.bpm > 0
-    ? clampNumber(frame.bpm, 30, 220)
+  const noise = !frame.ppd || !wearing || !eegValid || !ppgValid;
+  const bpm = frame.bpm > 0 && ppgValid
+    ? clampNumber(frame.bpm, 30, 240)
     : fallbackState.heartRate;
-  const signalQuality = frame.ppd && wearing && ppgOk ? 88 : 42;
+  const signalQuality = frame.ppd && wearing && eegValid && ppgValid ? 88 : 42;
 
   return {
     mode: fallbackState.mode,
@@ -196,6 +211,9 @@ export const parseUartBinaryFrame = (
     powerSpectrum,
     electrodeStatus: frame.electrodeStatus,
     ppd: frame.ppd,
+    heartbeatEvent: Boolean(frame.pud0 & 0x80),
+    eegValid,
+    ppgValid,
   };
 };
 
@@ -229,9 +247,13 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
   const sdppgValue = message.sdppg ?? 0;
   const rrIntervalValue = message.rrInterval ?? 0;
   const powerSpectrumValue = message.powerSpectrum ?? 0;
+  const ch1Value = message.eegValid ? message.ch1 : Number.NaN;
+  const ch2Value = message.eegValid ? message.ch2 : Number.NaN;
   const pcValue = message.pc ?? prev.pc[prev.pc.length - 1] ?? 0;
   const previousPc = prev.pc[prev.pc.length - 1];
   const pcStep = previousPc === undefined ? 1 : (pcValue - previousPc + 32) % 32;
+  const ch1ForStats = Number.isFinite(ch1Value) ? ch1Value : 0;
+  const ch2ForStats = Number.isFinite(ch2Value) ? ch2Value : 0;
 
   return {
     ...prev,
@@ -243,8 +265,8 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     signalQuality: message.signalQuality,
     noise: message.noise,
     electrodeStatus: message.electrodeStatus ?? prev.electrodeStatus,
-    ch1: appendValue(prev.ch1, message.ch1, MAX_CHART_POINTS),
-    ch2: appendValue(prev.ch2, message.ch2, MAX_CHART_POINTS),
+    ch1: appendValue(prev.ch1, ch1Value, MAX_CHART_POINTS),
+    ch2: appendValue(prev.ch2, ch2Value, MAX_CHART_POINTS),
     timestamps: appendValue(prev.timestamps, nextTimestamp, MAX_CHART_POINTS),
     pc: appendValue(prev.pc, pcValue, MAX_CHART_POINTS),
     pcStep: appendValue(prev.pcStep, pcStep, MAX_CHART_POINTS),
@@ -252,6 +274,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     sdppg: appendValue(prev.sdppg, sdppgValue, MAX_CHART_POINTS),
     rrInterval: appendValue(prev.rrInterval, rrIntervalValue, MAX_CHART_POINTS),
     powerSpectrum: appendValue(prev.powerSpectrum, powerSpectrumValue, MAX_CHART_POINTS),
+    heartbeatEvents: appendValue(prev.heartbeatEvents, message.heartbeatEvent, MAX_CHART_POINTS),
+    eegValidSamples: appendValue(prev.eegValidSamples, message.eegValid, MAX_CHART_POINTS),
+    ppgValidSamples: appendValue(prev.ppgValidSamples, message.ppgValid, MAX_CHART_POINTS),
     bpmSamples: appendValue(prev.bpmSamples, message.bpm, MAX_CHART_POINTS),
     wearSamples: appendValue(prev.wearSamples, wearStatus, MAX_CHART_POINTS),
     signalSamples: appendValue(prev.signalSamples, signalStatus, MAX_CHART_POINTS),
@@ -261,6 +286,9 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
       message.signalQuality,
       METRIC_HISTORY_LIMIT
     ),
+    heartbeatTimestamps: message.heartbeatEvent
+      ? appendValue(prev.heartbeatTimestamps, nextTimestamp, MAX_CHART_POINTS)
+      : prev.heartbeatTimestamps,
     sessionSeconds: Math.max(
       0,
       Math.floor((wallClockNowMs - sessionStartedAtMs) / 1000)
@@ -302,10 +330,10 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
         prev.stats.unstableMoments + (wearStatus === "unstable" ? 1 : 0),
       notWornMoments:
         prev.stats.notWornMoments + (wearStatus === "not_worn" ? 1 : 0),
-      ch1Sum: prev.stats.ch1Sum + message.ch1,
-      ch2Sum: prev.stats.ch2Sum + message.ch2,
-      ch1PeakAbs: Math.max(prev.stats.ch1PeakAbs, Math.abs(message.ch1)),
-      ch2PeakAbs: Math.max(prev.stats.ch2PeakAbs, Math.abs(message.ch2)),
+      ch1Sum: prev.stats.ch1Sum + ch1ForStats,
+      ch2Sum: prev.stats.ch2Sum + ch2ForStats,
+      ch1PeakAbs: Math.max(prev.stats.ch1PeakAbs, Math.abs(ch1ForStats)),
+      ch2PeakAbs: Math.max(prev.stats.ch2PeakAbs, Math.abs(ch2ForStats)),
     },
   };
 };

@@ -34,6 +34,9 @@ export interface Fx2IncomingMessage {
   powerSpectrum?: number;
   electrodeStatus?: number;
   ppd?: boolean;
+  heartbeatEvent: boolean;
+  eegValid: boolean;
+  ppgValid: boolean;
 }
 
 export interface Fx2SessionStats {
@@ -68,11 +71,15 @@ export interface Fx2State {
   sdppg: number[];
   rrInterval: number[];
   powerSpectrum: number[];
+  heartbeatEvents: boolean[];
+  eegValidSamples: boolean[];
+  ppgValidSamples: boolean[];
   bpmSamples: number[];
   wearSamples: WearStatus[];
   signalSamples: SignalStatus[];
   heartRateHistory: number[];
   signalQualityHistory: number[];
+  heartbeatTimestamps: number[];
   sessionSeconds: number;
   sessionStartedAt: string | null;
   lastUpdated: string;

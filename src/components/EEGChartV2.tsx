@@ -44,9 +44,9 @@ const EMPTY_DATA: uPlot.AlignedData = [new Float64Array(), [], []];
 
 const MIN_Y_RANGE_UV = 1600;
 const Y_RANGE_PADDING = 0.2;
-const DEFAULT_SAMPLE_INTERVAL_SECONDS = 1 / 60;
+const DEFAULT_SAMPLE_INTERVAL_SECONDS = 1 / 250;
 const MIN_SAMPLE_INTERVAL_SECONDS = 0.001;
-const MAX_DUPLICATE_SAMPLE_INTERVAL_SECONDS = 1 / 30;
+const MAX_DUPLICATE_SAMPLE_INTERVAL_SECONDS = 1 / 125;
 const LIVE_EDGE_TOLERANCE_SECONDS = 0.5;
 
 // Quick buttons visible without dropdown

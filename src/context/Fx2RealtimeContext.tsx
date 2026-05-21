@@ -186,7 +186,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       if (!sessionActiveRef.current) return;
 
       // Buffer frames; a 30Hz interval drains and applies them to avoid
-      // per-frame React renders at full 60Hz hardware rate
+      // per-frame React renders at the full hardware sample rate
       pendingHardwareRef.current.push(event.frame);
     });
   }, []);

@@ -917,7 +917,7 @@ function EEGChartV2({
         {ch1.length === 0 ? (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 text-center text-[#9CA3AF] dark:text-slate-600"
+            className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 text-center text-[#6B7280] dark:text-slate-300"
           >
             <svg viewBox="0 0 64 32" className="h-8 w-32 opacity-50" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M2 16 L10 16 L14 8 L20 24 L26 4 L32 28 L38 12 L44 16 L52 16 L62 16" />

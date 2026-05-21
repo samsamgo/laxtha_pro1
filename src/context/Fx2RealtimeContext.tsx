@@ -42,7 +42,6 @@ interface Fx2RealtimeContextValue {
   sessionPhase: SessionPhase;
   hardwareStatus: Fx2HardwareStatus;
   recorderSummary: EegSessionSummary;
-  setSelectedMode: (mode: DeviceMode) => void;
   connectDevice: () => Promise<boolean>;
   disconnectDevice: () => void;
   startSession: () => void;
@@ -298,10 +297,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     setRecorderSummary(recorderRef.current.getSummary());
   };
 
-  const setSelectedMode = (_mode: DeviceMode) => {
-    // only serial supported now — no-op kept for interface compatibility
-  };
-
   const value = useMemo<Fx2RealtimeContextValue>(
     () => ({
       state,
@@ -310,7 +305,6 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       sessionPhase,
       hardwareStatus,
       recorderSummary,
-      setSelectedMode,
       connectDevice,
       disconnectDevice,
       startSession,

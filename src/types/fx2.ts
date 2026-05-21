@@ -1,3 +1,5 @@
+import type { FftEpoch } from "../lib/fftAccumulator";
+
 export type DeviceMode = "serial";
 export type WearStatus = "worn" | "unstable" | "not_worn";
 export type SignalStatus = "good" | "normal" | "poor";
@@ -91,6 +93,7 @@ export interface Fx2State {
   ch1Saturation: number | null;
   ch2Saturation: number | null;
   pcdBuffer: (number | null)[];
+  fftEpochs: FftEpoch[];
   sessionSeconds: number;
   sessionStartedAt: string | null;
   lastUpdated: string;

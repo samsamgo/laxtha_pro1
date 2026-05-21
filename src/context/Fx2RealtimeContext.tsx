@@ -8,6 +8,7 @@ import {
   type PropsWithChildren
 } from "react";
 import { EegSessionRecorder } from "../lib/eegSessionRecorder";
+import { FftAccumulator, FFT_MAX_EPOCHS } from "../lib/fftAccumulator";
 import {
   appendLog,
   applyIncomingMessage,
@@ -20,6 +21,7 @@ import {
   type Fx2HardwareStatus,
 } from "../services/fx2Hardware";
 import type { EegSample, EegSessionSummary } from "../types/eegRecorder";
+import type { FftEpoch } from "../lib/fftAccumulator";
 import type { DeviceMode, Fx2BinaryFrame, Fx2State } from "../types/fx2";
 
 type SessionPhase = "idle" | "running" | "stopped";
@@ -60,6 +62,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const [hardwareStatus, setHardwareStatus] = useState<Fx2HardwareStatus>("idle");
 
   const hardwareRef = useRef(new Fx2HardwareService());
+  const fftAccumulatorRef = useRef(new FftAccumulator());
   const pendingHardwareRef = useRef<Fx2BinaryFrame[]>([]);
   const recorderRef = useRef(new EegSessionRecorder());
   const recTickRef = useRef<number | null>(null);
@@ -114,14 +117,26 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     });
   };
 
+  const appendFftEpochToState = (prev: Fx2State, epoch: FftEpoch): Fx2State => ({
+    ...prev,
+    fftEpochs: [...prev.fftEpochs.slice(-(FFT_MAX_EPOCHS - 1)), epoch],
+  });
+
   const applyHardwareFrames = (frames: Fx2BinaryFrame[], prev: Fx2State) => {
     const previousTimestamp = prev.timestamps[prev.timestamps.length - 1];
     const previousPc = prev.pc[prev.pc.length - 1];
     const timestampedFrames = timestampHardwareBatch(frames, previousTimestamp, previousPc);
 
     return timestampedFrames.reduce((nextState, { frame, timestamp }) => {
+      const fftEpoch = frame.ppd
+        ? fftAccumulatorRef.current.ingest(frame.ch3Raw, Boolean(frame.pud0 & 0x01), timestamp)
+        : null;
+      if (!frame.ppd) {
+        fftAccumulatorRef.current.reset();
+      }
       const nextMessage = parseUartBinaryFrame(frame, nextState, timestamp);
-      return nextMessage ? applyIncomingMessage(nextMessage, nextState) : nextState;
+      const updatedState = nextMessage ? applyIncomingMessage(nextMessage, nextState) : nextState;
+      return fftEpoch ? appendFftEpochToState(updatedState, fftEpoch) : updatedState;
     }, prev);
   };
 
@@ -207,6 +222,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const disconnectDevice = () => {
     sessionActiveRef.current = false;
     pendingHardwareRef.current = [];
+    fftAccumulatorRef.current.reset();
     if (sessionPhaseRef.current === "running") {
       recorderRef.current.stopRecording();
       stopRecTick();
@@ -225,6 +241,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const startSession = () => {
     sessionActiveRef.current = true;
     pendingHardwareRef.current = [];
+    fftAccumulatorRef.current.reset();
     setState(createInitialFx2State("serial"));
     setSessionPhase("running");
     recorderRef.current.startRecording("serial");
@@ -236,6 +253,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const stopSession = () => {
     sessionActiveRef.current = false;
     pendingHardwareRef.current = [];
+    fftAccumulatorRef.current.reset();
     setSessionPhase("stopped");
     setState((prev) => ({
       ...prev,

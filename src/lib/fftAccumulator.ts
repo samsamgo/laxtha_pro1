@@ -1,3 +1,5 @@
+import { toKstIso } from "./timeFormat";
+
 export interface FftBandPowers {
   theta: number;
   alpha: number;
@@ -11,6 +13,8 @@ export interface FftBandPowers {
 export interface FftEpoch {
   startedAt: number;
   endedAt: number;
+  startedAtIso: string;
+  endedAtIso: string;
   freqResolutionHz: number;
   ch1Bins: number[];
   ch2Bins: number[];
@@ -112,6 +116,8 @@ export class FftAccumulator {
     return {
       startedAt: this.startedAt,
       endedAt,
+      startedAtIso: toKstIso(this.startedAt),
+      endedAtIso: toKstIso(endedAt),
       freqResolutionHz: FFT_FREQUENCY_RESOLUTION_HZ,
       ch1Bins,
       ch2Bins,

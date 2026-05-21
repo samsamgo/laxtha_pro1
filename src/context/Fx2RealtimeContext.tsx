@@ -48,6 +48,7 @@ interface Fx2RealtimeContextValue {
   startSession: () => void;
   stopSession: () => void;
   appendSample: (sample: EegSample) => void;
+  appendFftEpoch: (epoch: FftEpoch) => void;
   exportCsv: () => void;
   exportJson: () => void;
   clearRecording: () => void;
@@ -136,6 +137,9 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       }
       const nextMessage = parseUartBinaryFrame(frame, nextState, timestamp);
       const updatedState = nextMessage ? applyIncomingMessage(nextMessage, nextState) : nextState;
+      if (fftEpoch) {
+        recorderRef.current.appendFftEpoch(fftEpoch);
+      }
       return fftEpoch ? appendFftEpochToState(updatedState, fftEpoch) : updatedState;
     }, prev);
   };
@@ -269,6 +273,10 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     recorderRef.current.appendSample(sample);
   };
 
+  const appendFftEpoch = (epoch: FftEpoch) => {
+    recorderRef.current.appendFftEpoch(epoch);
+  };
+
   const exportCsv = () => recorderRef.current.exportCsv();
   const exportJson = () => recorderRef.current.exportJson();
 
@@ -296,6 +304,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
       startSession,
       stopSession,
       appendSample,
+      appendFftEpoch,
       exportCsv,
       exportJson,
       clearRecording,

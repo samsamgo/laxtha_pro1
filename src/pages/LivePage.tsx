@@ -314,6 +314,12 @@ export default function LivePage() {
         wear: state.wearSamples[index] ?? state.wearStatus,
         signal: state.signalSamples[index] ?? state.signalStatus,
         mode: state.mode,
+        heartbeatEvent: state.heartbeatEvents[index] ?? false,
+        ch1Saturation: state.ch1SaturationSamples[index] ?? null,
+        ch2Saturation: state.ch2SaturationSamples[index] ?? null,
+        batteryPercent: state.batteryPercentSamples[index] ?? null,
+        eegValid: state.eegValidSamples[index] ?? true,
+        ppgValid: state.ppgValidSamples[index] ?? true,
       });
     }
   }, [
@@ -325,6 +331,12 @@ export default function LivePage() {
     state.sdppg,
     state.rrInterval,
     state.powerSpectrum,
+    state.heartbeatEvents,
+    state.ch1SaturationSamples,
+    state.ch2SaturationSamples,
+    state.batteryPercentSamples,
+    state.eegValidSamples,
+    state.ppgValidSamples,
     state.bpmSamples,
     state.wearSamples,
     state.signalSamples,

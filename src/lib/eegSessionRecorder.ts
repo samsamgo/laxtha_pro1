@@ -1,7 +1,14 @@
 import type { EegSample, EegSessionExport, EegSessionSummary } from "../types/eegRecorder";
+import {
+  FFT_BAND_INDICES,
+  FFT_BIN_COUNT,
+  FFT_FREQUENCY_RESOLUTION_HZ,
+  type FftEpoch,
+} from "./fftAccumulator";
 
 export class EegSessionRecorder {
   private samples: EegSample[] = [];
+  private fftEpochs: FftEpoch[] = [];
   private startedAt: number | null = null;
   private endedAt: number | null = null;
   private recording = false;
@@ -9,6 +16,7 @@ export class EegSessionRecorder {
 
   startRecording(mode: string): void {
     this.samples = [];
+    this.fftEpochs = [];
     this.startedAt = Date.now();
     this.endedAt = null;
     this.recording = true;
@@ -23,6 +31,7 @@ export class EegSessionRecorder {
 
   clearRecording(): void {
     this.samples = [];
+    this.fftEpochs = [];
     this.startedAt = null;
     this.endedAt = null;
     this.recording = false;
@@ -31,6 +40,11 @@ export class EegSessionRecorder {
   appendSample(sample: EegSample): void {
     if (!this.recording) return;
     this.samples.push(sample);
+  }
+
+  appendFftEpoch(epoch: FftEpoch): void {
+    if (!this.recording) return;
+    this.fftEpochs.push(epoch);
   }
 
   getSummary(): EegSessionSummary {
@@ -69,10 +83,12 @@ export class EegSessionRecorder {
     ].join("\n");
 
     const header =
-      "timestamp,elapsed_ms,pc,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode";
+      "timestamp,elapsed_ms,pc,ch1_uv,ch2_uv,bpm,ppg,sdppg,rr_interval_ms,power_spectrum,wear,signal,mode,heartbeat_event,ch1_saturation,ch2_saturation,battery_percent,eeg_valid,ppg_valid";
     const rows = this.samples.map(
-      (s) =>
-        `${s.timestamp},${s.elapsedMs},${s.pc},${s.ch1.toFixed(4)},${s.ch2.toFixed(4)},${s.bpm},${s.ppg.toFixed(4)},${s.sdppg.toFixed(4)},${s.rrInterval},${s.powerSpectrum.toFixed(2)},${s.wear},${s.signal},${s.mode}`
+      (s) => {
+        const nullable = (value: number | null) => value === null ? "" : String(value);
+        return `${s.timestamp},${s.elapsedMs},${s.pc},${s.ch1.toFixed(4)},${s.ch2.toFixed(4)},${s.bpm},${s.ppg.toFixed(4)},${s.sdppg.toFixed(4)},${s.rrInterval},${s.powerSpectrum.toFixed(2)},${s.wear},${s.signal},${s.mode},${s.heartbeatEvent},${nullable(s.ch1Saturation)},${nullable(s.ch2Saturation)},${nullable(s.batteryPercent)},${s.eegValid},${s.ppgValid}`;
+      }
     );
 
     // UTF-8 BOM for Excel compatibility
@@ -96,15 +112,39 @@ export class EegSessionRecorder {
     const endTs = this.endedAt ?? Date.now();
 
     const data: EegSessionExport = {
-      device: "FX2",
+      device: "neuroNicle FX2",
       app: "FX2 Web Dashboard",
       mode: this.sessionMode,
+      samplingRateHz: 250,
+      eegConversionUvPerDigit: 0.03606,
+      eegCenter: 16384,
+      bandwidthHz: [3, 41],
+      fftFrequencyResolutionHz: FFT_FREQUENCY_RESOLUTION_HZ,
+      fftBins: FFT_BIN_COUNT,
+      bandIndices: FFT_BAND_INDICES,
       startedAt: new Date(startTs).toISOString(),
       endedAt: new Date(endTs).toISOString(),
       durationMs: endTs - startTs,
-      channels: ["pc", "ch1_uv", "ch2_uv", "bpm", "ppg", "sdppg", "rr_interval_ms", "power_spectrum"],
+      channels: [
+        "pc",
+        "ch1_uv",
+        "ch2_uv",
+        "bpm",
+        "ppg",
+        "sdppg",
+        "rr_interval_ms",
+        "power_spectrum",
+        "heartbeat_event",
+        "ch1_saturation",
+        "ch2_saturation",
+        "battery_percent",
+        "eeg_valid",
+        "ppg_valid",
+      ],
       sampleCount: this.samples.length,
       samples: this.samples,
+      fftEpochCount: this.fftEpochs.length,
+      fftEpochs: this.fftEpochs,
     };
 
     try {

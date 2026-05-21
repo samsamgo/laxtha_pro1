@@ -15,6 +15,9 @@ import { toKstIso } from "../lib/timeFormat";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import type { ExtWindowSeconds } from "../types/eegRecorder";
 
+const BPM_THRESHOLDS = { veryLow: 50, low: 60, high: 100, veryHigh: 130 } as const;
+const SIGNAL_QUALITY_THRESHOLDS = { good: 90, normal: 60 } as const;
+
 const formatDuration = (seconds: number) => {
   const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
   const mm = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
@@ -36,14 +39,18 @@ const formatFileSize = (bytes: number): string => {
 };
 
 const getBpmValueClassName = (bpm: number): string => {
-  if (bpm < 50 || bpm > 130) return "text-[#EF4444] dark:text-red-400";
-  if (bpm < 60 || bpm > 100) return "text-[#F59E0B] dark:text-amber-400";
+  if (bpm < BPM_THRESHOLDS.veryLow || bpm > BPM_THRESHOLDS.veryHigh) {
+    return "text-[#EF4444] dark:text-red-400";
+  }
+  if (bpm < BPM_THRESHOLDS.low || bpm > BPM_THRESHOLDS.high) {
+    return "text-[#F59E0B] dark:text-amber-400";
+  }
   return "text-[#111827] dark:text-white";
 };
 
 const getSignalBarClassName = (quality: number): string => {
-  if (quality >= 90) return "bg-[#22C55E]";
-  if (quality >= 60) return "bg-[#F59E0B]";
+  if (quality >= SIGNAL_QUALITY_THRESHOLDS.good) return "bg-[#22C55E]";
+  if (quality >= SIGNAL_QUALITY_THRESHOLDS.normal) return "bg-[#F59E0B]";
   return "bg-[#EF4444]";
 };
 

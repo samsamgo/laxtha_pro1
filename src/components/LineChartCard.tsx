@@ -250,7 +250,12 @@ function LineChartCard({ values, timestamps, color, label, description }: LineCh
           ) : null}
         </div>
       ) : null}
-      <div ref={containerRef} className="w-full" />
+      <div
+        ref={containerRef}
+        className="w-full"
+        role={label ? "img" : undefined}
+        aria-label={label ? `${label}: 최근 ${WINDOW_SECONDS}초 추이` : undefined}
+      />
     </div>
   );
 }

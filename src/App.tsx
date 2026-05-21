@@ -33,6 +33,10 @@ function DocumentTitle() {
     const title =
       ROUTE_TITLES[pathname] ?? "LAXTHA · FX2 실시간 뇌파(EEG) 대시보드";
     document.title = title;
+    const ogUrlMeta = document.querySelector('meta[property="og:url"]');
+    if (ogUrlMeta) {
+      ogUrlMeta.setAttribute("content", window.location.href);
+    }
   }, [pathname]);
   return null;
 }

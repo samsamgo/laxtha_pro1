@@ -84,7 +84,8 @@ export class EegSessionRecorder {
       `# Duration: ${(durationMs / 1000).toFixed(1)}s`,
       `# Samples: ${this.samples.length}`,
       `# Note: All recorded samples are included — includes data no longer visible on chart`,
-      `# power_spectrum_raw_div10: CH3 raw byte pair / 10 per LXD141 §Power Spectrum (CH3); time-series of n-indexed bins, not band power`,
+      `# ppg_au_sdppg_au: CH4/CH5 raw - 16384, centered arbitrary units (0 = DC baseline, not μV)`,
+      `# power_spectrum_raw_div10: CH3 raw / 10 = current FFT bin value; see fftEpochs in JSON for full spectrum per 2-sec epoch`,
       `# Exported: ${toKstIso(Date.now())}`,
     ].join("\n");
 
@@ -124,9 +125,9 @@ export class EegSessionRecorder {
       samplingRateHz: 250,
       eegConversionUvPerDigit: 0.03606,
       eegCenter: 16384,
-      ppgUnit: "au",
-      ppgRawRange: [0, 32767],
-      ppgRawCenter: 16384,
+      ppgUnit: "au (centered, 0 = DC baseline; range ±16384)",
+      ppgRawRange: [-16384, 16383],
+      ppgRawCenter: 0,
       bandwidthHz: [3, 41],
       fftFrequencyResolutionHz: FFT_FREQUENCY_RESOLUTION_HZ,
       fftBins: FFT_BIN_COUNT,

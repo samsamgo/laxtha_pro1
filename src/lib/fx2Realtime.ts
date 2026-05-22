@@ -177,8 +177,8 @@ export const parseUartBinaryFrame = (
 
   const ch1 = (frame.ch1Raw - EEG_CENTER) * EEG_SCALE;
   const ch2 = (frame.ch2Raw - EEG_CENTER) * EEG_SCALE;
-  const ppg = frame.ch4Raw;   // raw 15-bit au (0~32767, DC ~16384)
-  const sdppg = frame.ch5Raw; // raw 15-bit au
+  const ppg = frame.ch4Raw - EEG_CENTER;    // centered au (-16384 ~ +16383), 0=baseline
+  const sdppg = frame.ch5Raw - EEG_CENTER;  // centered au, 0=baseline
   const ppgOk = Boolean(frame.pud0 & 0x04);   // bit2 = PPG signal ok
   const eegValid = (frame.electrodeStatus & EEG_ELECTRODE_MASK) === EEG_ELECTRODE_MASK;
   const ppgValid = Boolean(frame.electrodeStatus & REF_ELECTRODE_MASK) && ppgOk;
@@ -247,7 +247,7 @@ export const applyIncomingMessage = (message: Fx2IncomingMessage, prev: Fx2State
     (prev.stats.averageSignalQuality * prev.stats.sampleCount +
       message.signalQuality) /
     nextSampleCount;
-  const ppgValue = message.ppg ?? (message.bpm / 100 + (message.signalQuality - 60) / 500);
+  const ppgValue = message.ppg ?? 0;
   const sdppgValue = message.sdppg ?? 0;
   const rrIntervalValue = message.rrInterval ?? 0;
   const powerSpectrumValue = message.powerSpectrum ?? 0;

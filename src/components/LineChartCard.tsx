@@ -10,10 +10,11 @@ interface LineChartCardProps {
   label?: string;
   /** Friendly one-line explanation shown under the label for non-expert users. */
   description?: string;
+  /** Live window width in seconds (default 60). */
+  windowSeconds?: number;
 }
 
-// Keep a bounded live window without dropping detail from higher sample rates.
-const WINDOW_SECONDS = 60;
+const DEFAULT_WINDOW_SECONDS = 60;
 const MAX_POINTS = 18000;
 const CHART_HEIGHT = 100;
 
@@ -21,7 +22,7 @@ function hasAlignedTimestamps(values: number[], timestamps?: number[]): timestam
   return !!timestamps && timestamps.length === values.length;
 }
 
-function buildData(values: number[], timestamps?: number[]): uPlot.AlignedData {
+function buildData(values: number[], timestamps?: number[], windowSeconds = DEFAULT_WINDOW_SECONDS): uPlot.AlignedData {
   const xs: number[] = [];
   const ys: number[] = [];
 
@@ -45,7 +46,7 @@ function buildData(values: number[], timestamps?: number[]): uPlot.AlignedData {
       return [new Float64Array(), new Float64Array()];
     }
 
-    const minTime = latestTime - WINDOW_SECONDS;
+    const minTime = latestTime - windowSeconds;
 
     for (let i = values.length - 1; i >= 0 && xs.length < MAX_POINTS; i -= 1) {
       const value = values[i];
@@ -134,7 +135,7 @@ function formatTimeLabels(_u: uPlot, values: number[]): string[] {
   );
 }
 
-function makeOpts(w: number, color: string, darkMode: boolean, timeAxis: boolean): uPlot.Options {
+function makeOpts(w: number, color: string, darkMode: boolean, timeAxis: boolean, windowSeconds = DEFAULT_WINDOW_SECONDS): uPlot.Options {
   const gridColor = darkMode ? "#1E293B" : "#F1F5F9";
   const baselineColor = darkMode ? "#334155" : "#E5E7EB";
   const textColor = darkMode ? "#64748B" : "#9CA3AF";
@@ -154,7 +155,7 @@ function makeOpts(w: number, color: string, darkMode: boolean, timeAxis: boolean
           }
 
           if (timeAxis) {
-            return [dataMax - WINDOW_SECONDS, dataMax];
+            return [dataMax - windowSeconds, dataMax];
           }
 
           if (dataMin === dataMax) {
@@ -198,7 +199,7 @@ function makeOpts(w: number, color: string, darkMode: boolean, timeAxis: boolean
   };
 }
 
-function LineChartCard({ values, timestamps, color, label, description }: LineChartCardProps) {
+function LineChartCard({ values, timestamps, color, label, description, windowSeconds = DEFAULT_WINDOW_SECONDS }: LineChartCardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const uRef = useRef<uPlot | null>(null);
   const { darkMode } = useFx2Theme();
@@ -209,7 +210,7 @@ function LineChartCard({ values, timestamps, color, label, description }: LineCh
     if (!el) return;
     const w = el.clientWidth > 0 ? el.clientWidth : 300;
     uRef.current?.destroy();
-    uRef.current = new uPlot(makeOpts(w, color, darkMode, timeAxis), buildData(values, timestamps), el);
+    uRef.current = new uPlot(makeOpts(w, color, darkMode, timeAxis, windowSeconds), buildData(values, timestamps, windowSeconds), el);
 
     const ro = new ResizeObserver(([entry]) => {
       const newW = Math.floor(entry.contentRect.width);
@@ -223,11 +224,11 @@ function LineChartCard({ values, timestamps, color, label, description }: LineCh
       uRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [color, darkMode, timeAxis]);
+  }, [color, darkMode, timeAxis, windowSeconds]);
 
   useEffect(() => {
-    uRef.current?.setData(buildData(values, timestamps));
-  }, [values, timestamps]);
+    uRef.current?.setData(buildData(values, timestamps, windowSeconds));
+  }, [values, timestamps, windowSeconds]);
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
@@ -254,7 +255,7 @@ function LineChartCard({ values, timestamps, color, label, description }: LineCh
         ref={containerRef}
         className="w-full"
         role={label ? "img" : undefined}
-        aria-label={label ? `${label}: 최근 ${WINDOW_SECONDS}초 추이` : undefined}
+        aria-label={label ? `${label}: 최근 ${windowSeconds}초 추이` : undefined}
       />
     </div>
   );

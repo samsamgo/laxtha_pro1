@@ -735,6 +735,7 @@ export default function LivePage() {
               color="#10B981"
               label="혈류 신호 (PPG, au)"
               description="심장 박동에 따라 변하는 빛 흡수량. 맥파 모양을 보여줍니다."
+              windowSeconds={20}
             />
             <LineChartCard
               values={secondary.rrInterval.filter((v) => Number.isFinite(v) && v > 0)}

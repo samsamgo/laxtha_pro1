@@ -68,7 +68,9 @@ export class FftAccumulator {
 
   ingest(ch3Raw: number, pud0Bit0: boolean, timestamp: number): FftEpoch | null {
     if (pud0Bit0) {
-      this.start(timestamp);
+      this.start(timestamp);        // 정상 트리거: 항상 리셋 후 시작
+    } else if (!this.active) {
+      this.start(timestamp);        // 폴백: bit0 없는 디바이스 자동 시작
     }
 
     if (!this.active) {

@@ -67,7 +67,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const recorderRef = useRef(new EegSessionRecorder());
   const recTickRef = useRef<number | null>(null);
   const renderTickRef = useRef<number | null>(null);
-  const recordedFftEpochCountRef = useRef(0);
+  const lastRecordedEpochTimestampRef = useRef<number>(-1);
   const sessionActiveRef = useRef(false);
   const sessionPhaseRef = useRef<SessionPhase>("idle");
   const [recorderSummary, setRecorderSummary] = useState<EegSessionSummary>(
@@ -142,16 +142,12 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   };
 
   useEffect(() => {
-    const previousLength = recordedFftEpochCountRef.current;
-    if (state.fftEpochs.length < previousLength) {
-      recordedFftEpochCountRef.current = state.fftEpochs.length;
-      return;
+    for (const epoch of state.fftEpochs) {
+      if (epoch.endedAt > lastRecordedEpochTimestampRef.current) {
+        recorderRef.current.appendFftEpoch(epoch);
+        lastRecordedEpochTimestampRef.current = epoch.endedAt;
+      }
     }
-
-    for (let index = previousLength; index < state.fftEpochs.length; index += 1) {
-      recorderRef.current.appendFftEpoch(state.fftEpochs[index]);
-    }
-    recordedFftEpochCountRef.current = state.fftEpochs.length;
   }, [state.fftEpochs]);
 
   useEffect(() => {
@@ -256,7 +252,7 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
     sessionActiveRef.current = true;
     pendingHardwareRef.current = [];
     fftAccumulatorRef.current.reset();
-    recordedFftEpochCountRef.current = 0;
+    lastRecordedEpochTimestampRef.current = -1;
     setState(() => createInitialFx2State("serial"));
     setSessionPhase("running");
     recorderRef.current.startRecording("serial");

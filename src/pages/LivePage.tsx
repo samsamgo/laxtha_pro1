@@ -293,7 +293,7 @@ export default function LivePage() {
 
   const prevPhaseRef = useRef(sessionPhase);
   const sessionStartTsRef = useRef<number | null>(null);
-  const prevTimestampLengthRef = useRef(state.timestamps.length);
+  const lastRecordedTsRef = useRef<number>(-Infinity);
 
   // Throttle secondary chart data to ~4Hz
   const secondaryRef = useRef(state);
@@ -312,19 +312,18 @@ export default function LivePage() {
     if (prev === sessionPhase) return;
     if (sessionPhase === "running") {
       sessionStartTsRef.current = Date.now();
-      prevTimestampLengthRef.current = 0;
+      lastRecordedTsRef.current = -Infinity;
     }
   }, [sessionPhase]);
 
   useEffect(() => {
     if (sessionPhase !== "running") return;
-    const previousLength = prevTimestampLengthRef.current;
-    if (state.timestamps.length === previousLength) return;
-    prevTimestampLengthRef.current = state.timestamps.length;
+    const startTs = sessionStartTsRef.current ?? 0;
 
-    for (let index = previousLength; index < state.timestamps.length; index++) {
+    for (let index = 0; index < state.timestamps.length; index++) {
       const ts = state.timestamps[index];
-      const startTs = sessionStartTsRef.current ?? ts;
+      if (ts <= lastRecordedTsRef.current) continue;
+
       const rrInterval = state.rrInterval[index];
       appendSample({
         timestamp: toKstIso(ts),
@@ -347,9 +346,10 @@ export default function LivePage() {
         eegValid: state.eegValidSamples[index] ?? true,
         ppgValid: state.ppgValidSamples[index] ?? true,
       });
+      lastRecordedTsRef.current = ts;
     }
   }, [
-    state.timestamps.length,
+    state.timestamps,
     state.pc,
     state.ch1,
     state.ch2,

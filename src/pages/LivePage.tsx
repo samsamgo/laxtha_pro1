@@ -302,7 +302,7 @@ export default function LivePage() {
   useEffect(() => {
     const id = window.setInterval(() => {
       setSecondary(secondaryRef.current);
-    }, 1000);
+    }, 500);
     return () => window.clearInterval(id);
   }, []);
 
@@ -737,34 +737,39 @@ export default function LivePage() {
               description="심장 박동에 따라 변하는 빛 흡수량. 맥파 모양을 보여줍니다."
             />
             <LineChartCard
-              values={secondary.sdppg}
-              timestamps={secondary.timestamps}
-              color="#F59E0B"
-              label="혈류 미분 (sdPPG, au)"
-              description="PPG의 변화율. 혈관 탄성·수축 강도 추정에 사용됩니다."
-            />
-            <LineChartCard
               values={secondary.rrInterval.filter((v) => Number.isFinite(v) && v > 0)}
               timestamps={secondary.timestamps.filter((_, i) =>
                 Number.isFinite(secondary.rrInterval[i]) && secondary.rrInterval[i] > 0
               )}
               color="#8B5CF6"
               label="RR 간격 (ms)"
-              description="심박과 심박 사이 간격. 자율신경 균형(HRV) 파악에 사용됩니다."
+              description="심박 간 간격. 250–2000 ms 범위 유효값만 표시합니다."
             />
             <LineChartCard
-              values={secondary.fftBandHistory.map((b) => b.alpha)}
-              timestamps={secondary.fftBandHistory.map((b) => b.timestamp)}
-              color="#06B6D4"
-              label="알파파 파워 (8–12 Hz)"
-              description="이완·집중 전환 대역. 눈 감고 안정 시 증가합니다. 2초마다 갱신."
+              values={(() => {
+                const vals: number[] = [];
+                for (let i = 0; i < secondary.batteryPercentSamples.length; i++) {
+                  const v = secondary.batteryPercentSamples[i];
+                  if (v !== null) vals.push(v);
+                }
+                return vals;
+              })()}
+              timestamps={(() => {
+                const ts: number[] = [];
+                for (let i = 0; i < secondary.batteryPercentSamples.length; i++) {
+                  if (secondary.batteryPercentSamples[i] !== null) ts.push(secondary.timestamps[i]);
+                }
+                return ts;
+              })()}
+              color="#F59E0B"
+              label="배터리 (%)"
+              description="측정 중 배터리 잔량 추이. 10% 이하면 충전을 권장합니다."
             />
             <LineChartCard
-              values={secondary.fftBandHistory.map((b) => b.theta)}
-              timestamps={secondary.fftBandHistory.map((b) => b.timestamp)}
-              color="#A78BFA"
-              label="세타파 파워 (4–8 Hz)"
-              description="졸림·과부하 대역. 피로하거나 몰입 시 높아집니다. 2초마다 갱신."
+              values={secondary.signalQualityHistory}
+              color="#22C55E"
+              label="신호 품질 (%)"
+              description="착용 및 전극 연결 상태 기반 신호 품질. 80% 이상이 안정적입니다."
             />
           </div>
         ) : null}

@@ -1,7 +1,8 @@
 import type { EegSample, EegSessionExport, EegSessionSummary } from "../types/eegRecorder";
 import {
   FFT_BAND_INDICES,
-  FFT_BIN_COUNT,
+  FFT_CH1_BIN_COUNT,
+  FFT_CH2_BIN_COUNT,
   FFT_FREQUENCY_RESOLUTION_HZ,
   type FftEpoch,
 } from "./fftAccumulator";
@@ -130,7 +131,8 @@ export class EegSessionRecorder {
       ppgRawCenter: 0,
       bandwidthHz: [3, 41],
       fftFrequencyResolutionHz: FFT_FREQUENCY_RESOLUTION_HZ,
-      fftBins: FFT_BIN_COUNT,
+      fftCh1Bins: FFT_CH1_BIN_COUNT,
+      fftCh2Bins: FFT_CH2_BIN_COUNT,
       bandIndices: FFT_BAND_INDICES,
       startedAt: toKstIso(startTs),
       endedAt: toKstIso(endTs),

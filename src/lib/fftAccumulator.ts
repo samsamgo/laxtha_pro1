@@ -26,7 +26,9 @@ export interface FftEpoch {
 
 export type FftBandName = Exclude<keyof FftBandPowers, "total">;
 
-export const FFT_BIN_COUNT = 103;
+export const FFT_CH1_BIN_COUNT = 104;  // n=0..103 (CH1, 0Hz~50.5Hz)
+export const FFT_CH2_BIN_COUNT = 105;  // n=104..208 (CH2, 0Hz~51.0Hz)
+export const FFT_BIN_COUNT = FFT_CH1_BIN_COUNT; // legacy alias used in JSON export
 export const FFT_FREQUENCY_RESOLUTION_HZ = 1 / 2.048;
 export const FFT_MAX_EPOCHS = 60;
 
@@ -39,7 +41,8 @@ export const FFT_BAND_INDICES: Record<FftBandName, [number, number]> = {
   gamma: [62, 82],
 };
 
-const createEmptyBins = () => Array<number>(FFT_BIN_COUNT).fill(0);
+const createCh1Bins = () => Array<number>(FFT_CH1_BIN_COUNT).fill(0);
+const createCh2Bins = () => Array<number>(FFT_CH2_BIN_COUNT).fill(0);
 
 const sumRange = (bins: number[], start: number, end: number) => {
   let total = 0;
@@ -63,8 +66,8 @@ export class FftAccumulator {
   private active = false;
   private n = 0;
   private startedAt = 0;
-  private ch1Bins = createEmptyBins();
-  private ch2Bins = createEmptyBins();
+  private ch1Bins = createCh1Bins();
+  private ch2Bins = createCh2Bins();
 
   ingest(ch3Raw: number, pud0Bit0: boolean, timestamp: number): FftEpoch | null {
     if (pud0Bit0) {
@@ -80,13 +83,14 @@ export class FftAccumulator {
     const power = ch3Raw / 10;
     const index = this.n;
 
-    if (index <= 102) {
+    // CH1: n=0..103 (104 bins), CH2: n=104..208 (105 bins)
+    if (index <= 103) {
       this.ch1Bins[index] = power;
-    } else if (index <= 205) {
-      this.ch2Bins[index - 103] = power;
+    } else if (index <= 208) {
+      this.ch2Bins[index - 104] = power;
     }
 
-    if (index === 205) {
+    if (index === 208) {
       const epoch = this.finalize(timestamp);
       this.reset();
       return epoch;
@@ -100,16 +104,16 @@ export class FftAccumulator {
     this.active = false;
     this.n = 0;
     this.startedAt = 0;
-    this.ch1Bins = createEmptyBins();
-    this.ch2Bins = createEmptyBins();
+    this.ch1Bins = createCh1Bins();
+    this.ch2Bins = createCh2Bins();
   }
 
   private start(timestamp: number): void {
     this.active = true;
     this.n = 0;
     this.startedAt = timestamp;
-    this.ch1Bins = createEmptyBins();
-    this.ch2Bins = createEmptyBins();
+    this.ch1Bins = createCh1Bins();
+    this.ch2Bins = createCh2Bins();
   }
 
   private finalize(endedAt: number): FftEpoch {

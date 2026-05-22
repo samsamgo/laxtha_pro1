@@ -44,7 +44,8 @@ export interface EegSessionExport {
   ppgRawCenter: number;
   bandwidthHz: [number, number];
   fftFrequencyResolutionHz: number;
-  fftBins: number;
+  fftCh1Bins: number;
+  fftCh2Bins: number;
   bandIndices: Record<string, [number, number]>;
   startedAt: string;
   endedAt: string;

@@ -97,6 +97,13 @@ export interface Fx2State {
   ch2Saturation: number | null;
   pcdBuffer: (number | null)[];
   fftEpochs: FftEpoch[];
+  fftBandHistory: Array<{
+    timestamp: number;
+    theta: number;
+    alpha: number;
+    beta: number;
+    gamma: number;
+  }>;
   sessionSeconds: number;
   sessionStartedAt: string | null;
   lastUpdated: string;

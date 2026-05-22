@@ -126,6 +126,7 @@ export const createInitialFx2State = (mode: DeviceMode = "serial"): Fx2State => 
     ch2Saturation: null,
     pcdBuffer: createEmptyPcdBuffer(),
     fftEpochs: [],
+    fftBandHistory: [],
     sessionSeconds: 0,
     sessionStartedAt: startedAt,
     lastUpdated: startedAt,

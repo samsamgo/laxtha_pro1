@@ -302,7 +302,7 @@ export default function LivePage() {
   useEffect(() => {
     const id = window.setInterval(() => {
       setSecondary(secondaryRef.current);
-    }, 250);
+    }, 1000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -742,6 +742,29 @@ export default function LivePage() {
               color="#F59E0B"
               label="혈류 미분 (sdPPG, au)"
               description="PPG의 변화율. 혈관 탄성·수축 강도 추정에 사용됩니다."
+            />
+            <LineChartCard
+              values={secondary.rrInterval.filter((v) => Number.isFinite(v) && v > 0)}
+              timestamps={secondary.timestamps.filter((_, i) =>
+                Number.isFinite(secondary.rrInterval[i]) && secondary.rrInterval[i] > 0
+              )}
+              color="#8B5CF6"
+              label="RR 간격 (ms)"
+              description="심박과 심박 사이 간격. 자율신경 균형(HRV) 파악에 사용됩니다."
+            />
+            <LineChartCard
+              values={secondary.fftBandHistory.map((b) => b.alpha)}
+              timestamps={secondary.fftBandHistory.map((b) => b.timestamp)}
+              color="#06B6D4"
+              label="알파파 파워 (8–12 Hz)"
+              description="이완·집중 전환 대역. 눈 감고 안정 시 증가합니다. 2초마다 갱신."
+            />
+            <LineChartCard
+              values={secondary.fftBandHistory.map((b) => b.theta)}
+              timestamps={secondary.fftBandHistory.map((b) => b.timestamp)}
+              color="#A78BFA"
+              label="세타파 파워 (4–8 Hz)"
+              description="졸림·과부하 대역. 피로하거나 몰입 시 높아집니다. 2초마다 갱신."
             />
           </div>
         ) : null}

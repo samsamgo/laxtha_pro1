@@ -7,10 +7,12 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 const LivePage = lazy(() => import("./pages/LivePage"));
 const SummaryPage = lazy(() => import("./pages/SummaryPage"));
+const AnalyzePage = lazy(() => import("./pages/AnalyzePage"));
 
 const ROUTE_TITLES: Record<string, string> = {
   "/live": "실시간 측정 · LAXTHA FX2 EEG Dashboard",
   "/summary": "측정 요약 · LAXTHA FX2 EEG Dashboard",
+  "/analyze": "JSON 분석 · LAXTHA FX2 EEG Dashboard",
 };
 
 function RouteFallback() {
@@ -64,6 +66,16 @@ export default function App() {
                 <Layout title="측정 요약">
                   <Suspense fallback={<RouteFallback />}>
                     <SummaryPage />
+                  </Suspense>
+                </Layout>
+              }
+            />
+            <Route
+              path="/analyze"
+              element={
+                <Layout title="JSON 분석">
+                  <Suspense fallback={<RouteFallback />}>
+                    <AnalyzePage />
                   </Suspense>
                 </Layout>
               }

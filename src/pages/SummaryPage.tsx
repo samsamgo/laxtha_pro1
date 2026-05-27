@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
-import { openLaxthaGpt } from "../lib/external";
 
 const modeLabelMap: Record<string, string> = {
   serial: "Web Serial",
@@ -79,6 +78,22 @@ export default function SummaryPage() {
     sumRr += v;
   }
   const avgRr = validRr.length > 0 ? Math.round(sumRr / validRr.length) : 0;
+
+  const fftBands = (() => {
+    const hist = state.fftBandHistory;
+    if (hist.length === 0) return null;
+    let t = 0, a = 0, b = 0;
+    for (const e of hist) { t += e.theta; a += e.alpha; b += e.beta; }
+    const n = hist.length;
+    const rawT = t / n, rawA = a / n, rawB = b / n;
+    const base = t + a + b;
+    if (!base) return null;
+    const tp = (t / base) * 100, ap = (a / base) * 100, bp = (b / base) * 100;
+    const m: [string, number][] = [["세타", tp], ["알파", ap], ["베타", bp]];
+    m.sort((x, y) => y[1] - x[1]);
+    const dom = m[0][1] - m[1][1] < 5 ? "혼합" : m[0][0];
+    return { theta: tp, alpha: ap, beta: bp, dominant: dom, rawTheta: rawT, rawAlpha: rawA, rawBeta: rawB };
+  })();
 
   const handleRestart = () => {
     startSession();
@@ -235,6 +250,32 @@ export default function SummaryPage() {
             </div>
           ) : null}
         </div>
+
+        {/* FFT 대역 */}
+        {fftBands ? (
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-[#111827] dark:text-white mb-4">주파수 대역 분포</h3>
+            <div className="flex items-end justify-center gap-6 h-40">
+              {([
+                { key: "theta" as const, label: "세타", sub: "4–8 Hz", color: "#8B5CF6" },
+                { key: "alpha" as const, label: "알파", sub: "8–12 Hz", color: "#22C55E" },
+                { key: "beta" as const, label: "베타", sub: "12–30 Hz", color: "#F59E0B" },
+              ]).map(({ key, label, sub, color }) => (
+                <div key={key} className="flex flex-col items-center gap-1 flex-1 max-w-[100px]">
+                  <span className="text-sm font-bold text-[#111827] dark:text-white">{fftBands[key].toFixed(1)}%</span>
+                  <div className="w-full rounded-t-lg" style={{ height: `${Math.max(fftBands[key] * 1.2, 8)}px`, backgroundColor: color }} />
+                  <span className="text-xs font-semibold text-[#111827] dark:text-white mt-1">{label}</span>
+                  <span className="text-[9px] text-[#9CA3AF] dark:text-slate-500">{sub}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-[#9CA3AF] dark:text-slate-500">
+              <span>우세: <span className="font-semibold text-[#111827] dark:text-white">{fftBands.dominant}</span></span>
+              <span>·</span>
+              <span>{state.fftBandHistory.length} epochs · 평균 {fftBands.rawTheta.toFixed(1)} / {fftBands.rawAlpha.toFixed(1)} / {fftBands.rawBeta.toFixed(1)}</span>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section aria-labelledby="session-info-title" className="fx2-card fx2-outline lg:col-span-4">
@@ -302,23 +343,30 @@ export default function SummaryPage() {
               >
                 JSON 저장
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  openLaxthaGpt();
-                  exportJson();
-                }}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                aria-label="JSON 다운로드 후 LAXTHA 뇌파 브리핑 GPT를 새 탭에서 열기"
-                title="JSON 자동 다운로드 + GPT 새 탭으로 열기"
-              >
-                🤖 GPT로 분석
-              </button>
             </div>
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-2">
+        {/* 분석하러 가기 CTA */}
+        <div className="mt-5 rounded-2xl border-2 border-violet-300 bg-violet-50 p-4 dark:border-violet-700 dark:bg-violet-500/10">
+          <p className="text-xs font-semibold text-violet-800 dark:text-violet-300">
+            JSON을 저장한 뒤, 분석 페이지에서 업로드하면 뇌파 상태를 확인할 수 있습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => { exportJson(); navigate("/analyze"); }}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-violet-700 hover:shadow-lg"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <path d="M14 2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z" />
+              <path d="M10 2v4l2-1.5L14 6V2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M6 10h8M6 13h5" strokeLinecap="round" />
+            </svg>
+            분석하러 가기 (JSON 자동 저장)
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2">
           <button
             type="button"
             onClick={handleRestart}

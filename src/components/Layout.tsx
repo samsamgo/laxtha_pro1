@@ -14,6 +14,7 @@ let toastCounter = 0;
 const navItems = [
   { to: "/live", label: "실시간", icon: "live" },
   { to: "/summary", label: "요약", icon: "summary" },
+  { to: "/analyze", label: "분석", icon: "analyze" },
 ] as const;
 
 const hardwareLabelMap = {
@@ -45,11 +46,20 @@ interface LayoutProps {
   title: string;
 }
 
-function NavIcon({ kind }: { kind: "live" | "summary" }) {
+function NavIcon({ kind }: { kind: "live" | "summary" | "analyze" }) {
   if (kind === "live") {
     return (
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
         <path d="M3 11h2l2-5 3 10 2-7 2 4h3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (kind === "analyze") {
+    return (
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+        <path d="M14 2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z" />
+        <path d="M10 2v4l2-1.5L14 6V2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M6 10h8M6 13h5" strokeLinecap="round" />
       </svg>
     );
   }
@@ -326,7 +336,7 @@ export default function Layout({ children, title }: LayoutProps) {
         aria-label="모바일 내비게이션"
         className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-24px)] max-w-md -translate-x-1/2 rounded-2xl border border-gray-100 bg-white/95 p-2 shadow-lg backdrop-blur transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
       >
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {navItems.map((item) => {
             const active = location.pathname === item.to;
 

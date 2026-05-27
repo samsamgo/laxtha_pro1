@@ -5,12 +5,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import EEGChartV2 from "../components/EEGChartV2";
+import FftBandChart from "../components/FftBandChart";
 import LineChartCard from "../components/LineChartCard";
 import { useFx2RealtimeSession } from "../context/Fx2RealtimeContext";
 import { useFx2Theme } from "../context/ThemeContext";
-import { openLaxthaGpt } from "../lib/external";
 import { toKstIso } from "../lib/timeFormat";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import type { ExtWindowSeconds } from "../types/eegRecorder";
@@ -228,6 +228,7 @@ export default function LivePage() {
     exportJson,
     clearRecording,
   } = useFx2RealtimeSession();
+  const navigate = useNavigate();
   const { chartTheme } = useFx2Theme();
 
   const [windowSeconds, setWindowSeconds] = useState<ExtWindowSeconds>(30);
@@ -242,12 +243,15 @@ export default function LivePage() {
 
   const requestStopSession = () => {
     const confirmed = window.confirm(
-      "측정을 종료하시겠습니까?\n\n현재까지 기록된 데이터는 종료 후 CSV/JSON으로 내보낼 수 있습니다."
+      "측정을 종료하시겠습니까?\n\n종료 후 요약 페이지로 이동합니다."
     );
     if (!confirmed) return;
     setIsStopping(true);
     stopSession();
-    setTimeout(() => setIsStopping(false), 600);
+    setTimeout(() => {
+      setIsStopping(false);
+      navigate("/summary");
+    }, 400);
   };
 
   // Disconnect + reload in one step.
@@ -643,16 +647,11 @@ export default function LivePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    openLaxthaGpt();
-                    exportJson();
-                  }}
+                  onClick={() => { exportJson(); navigate("/analyze"); }}
                   disabled={recorderSummary.isRecording}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="JSON 다운로드 후 LAXTHA 뇌파 브리핑 GPT를 새 탭에서 엽니다"
-                  title="JSON 자동 다운로드 + GPT 새 탭으로 열기"
                 >
-                  🤖 GPT로 분석
+                  분석하러 가기
                 </button>
                 <button
                   type="button"
@@ -727,14 +726,14 @@ export default function LivePage() {
               values={secondary.heartRateHistory}
               color="#EF4444"
               label="심박 추이 (BPM)"
-              description="1초 단위 심박수 변화. 안정 시 60–100 bpm이 일반적입니다."
+              description="1초 단위 심박수 변화. 안정 시 60–100 bpm."
             />
             <LineChartCard
               values={secondary.ppg}
               timestamps={secondary.timestamps}
               color="#10B981"
-              label="혈류 신호 (PPG, au)"
-              description="심장 박동에 따라 변하는 빛 흡수량. 맥파 모양을 보여줍니다."
+              label="PPG (au)"
+              description="혈류 맥파 신호. 심박에 따른 파형."
               windowSeconds={20}
             />
             <LineChartCard
@@ -744,33 +743,39 @@ export default function LivePage() {
               )}
               color="#8B5CF6"
               label="RR 간격 (ms)"
-              description="심박 간 간격. 250–2000 ms 범위 유효값만 표시합니다."
+              description="심박 간 간격. HRV 분석 핵심 데이터."
             />
+            <FftBandChart data={secondary.fftBandHistory} />
             <LineChartCard
               values={(() => {
-                const vals: number[] = [];
-                for (let i = 0; i < secondary.batteryPercentSamples.length; i++) {
-                  const v = secondary.batteryPercentSamples[i];
-                  if (v !== null) vals.push(v);
+                const len = Math.min(secondary.ch1.length, secondary.ch2.length);
+                const out: number[] = [];
+                for (let i = 0; i < len; i++) {
+                  const v1 = secondary.ch1[i], v2 = secondary.ch2[i];
+                  if (Number.isFinite(v1) && Number.isFinite(v2)) out.push(Math.abs(v1) - Math.abs(v2));
                 }
-                return vals;
+                return out;
               })()}
               timestamps={(() => {
-                const ts: number[] = [];
-                for (let i = 0; i < secondary.batteryPercentSamples.length; i++) {
-                  if (secondary.batteryPercentSamples[i] !== null) ts.push(secondary.timestamps[i]);
+                const len = Math.min(secondary.ch1.length, secondary.ch2.length, secondary.timestamps.length);
+                const out: number[] = [];
+                for (let i = 0; i < len; i++) {
+                  if (Number.isFinite(secondary.ch1[i]) && Number.isFinite(secondary.ch2[i])) out.push(secondary.timestamps[i]);
                 }
-                return ts;
+                return out;
               })()}
-              color="#F59E0B"
-              label="배터리 (%)"
-              description="측정 중 배터리 잔량 추이. 10% 이하면 충전을 권장합니다."
+              color="#06B6D4"
+              label="좌우뇌 비대칭 (μV)"
+              description="CH1−CH2 진폭 차이. 0 근처면 좌우 균형."
+              windowSeconds={30}
             />
             <LineChartCard
-              values={secondary.signalQualityHistory}
-              color="#22C55E"
-              label="신호 품질 (%)"
-              description="착용 및 전극 연결 상태 기반 신호 품질. 80% 이상이 안정적입니다."
+              values={secondary.pc}
+              timestamps={secondary.timestamps.slice(0, secondary.pc.length)}
+              color="#F97316"
+              label="PC (0–31)"
+              description="패킷 순환 카운터. 0→31 반복."
+              windowSeconds={30}
             />
           </div>
         ) : null}

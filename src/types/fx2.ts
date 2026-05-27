@@ -103,6 +103,8 @@ export interface Fx2State {
     alpha: number;
     beta: number;
     gamma: number;
+    ch1Alpha: number;
+    ch2Alpha: number;
   }>;
   sessionSeconds: number;
   sessionStartedAt: string | null;

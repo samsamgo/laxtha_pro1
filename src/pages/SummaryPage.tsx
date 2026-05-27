@@ -79,11 +79,33 @@ export default function SummaryPage() {
   }
   const avgRr = validRr.length > 0 ? Math.round(sumRr / validRr.length) : 0;
 
+  const hrv = (() => {
+    if (validRr.length < 2) return null;
+    const n = validRr.length;
+    const mean = sumRr / n;
+    let varSum = 0;
+    let sqDiffSum = 0;
+    let nn50 = 0;
+    for (let i = 0; i < n; i++) {
+      varSum += (validRr[i] - mean) ** 2;
+      if (i > 0) {
+        const diff = validRr[i] - validRr[i - 1];
+        sqDiffSum += diff * diff;
+        if (Math.abs(diff) > 50) nn50++;
+      }
+    }
+    return {
+      sdnn: Math.round(Math.sqrt(varSum / (n - 1)) * 10) / 10,
+      rmssd: Math.round(Math.sqrt(sqDiffSum / (n - 1)) * 10) / 10,
+      pnn50: Math.round((nn50 / (n - 1)) * 100 * 10) / 10,
+    };
+  })();
+
   const fftBands = (() => {
     const hist = state.fftBandHistory;
     if (hist.length === 0) return null;
-    let t = 0, a = 0, b = 0;
-    for (const e of hist) { t += e.theta; a += e.alpha; b += e.beta; }
+    let t = 0, a = 0, b = 0, ch1A = 0, ch2A = 0;
+    for (const e of hist) { t += e.theta; a += e.alpha; b += e.beta; ch1A += e.ch1Alpha; ch2A += e.ch2Alpha; }
     const n = hist.length;
     const rawT = t / n, rawA = a / n, rawB = b / n;
     const base = t + a + b;
@@ -92,7 +114,10 @@ export default function SummaryPage() {
     const m: [string, number][] = [["세타", tp], ["알파", ap], ["베타", bp]];
     m.sort((x, y) => y[1] - x[1]);
     const dom = m[0][1] - m[1][1] < 5 ? "혼합" : m[0][0];
-    return { theta: tp, alpha: ap, beta: bp, dominant: dom, rawTheta: rawT, rawAlpha: rawA, rawBeta: rawB };
+    const alphaSum = ch1A + ch2A;
+    const faa = alphaSum > 0 ? Math.round(((ch2A - ch1A) / alphaSum) * 1000) / 1000 : 0;
+    const concentrationIdx = rawA > 0 ? Math.round((rawB / rawA) * 100) / 100 : 0;
+    return { theta: tp, alpha: ap, beta: bp, dominant: dom, rawTheta: rawT, rawAlpha: rawA, rawBeta: rawB, faa, concentrationIdx };
   })();
 
   const handleRestart = () => {
@@ -219,7 +244,7 @@ export default function SummaryPage() {
           {validRr.length > 0 ? (
             <div className="fx2-surface rounded-2xl border border-[#E5EBF4] p-4 dark:border-slate-700">
               <h3 className="text-sm font-semibold text-[#111827] dark:text-white">
-                RR 간격 (HRV)
+                RR 간격 · HRV
               </h3>
               <ul className="mt-3 space-y-2 text-xs text-[#6B7280] dark:text-slate-400">
                 <li>
@@ -229,17 +254,33 @@ export default function SummaryPage() {
                   </span>
                 </li>
                 <li>
-                  최소 RR:{" "}
+                  최소 / 최대:{" "}
                   <span className="font-semibold text-[#111827] dark:text-white">
-                    {minRr} ms
+                    {minRr} / {maxRr} ms
                   </span>
                 </li>
-                <li>
-                  최대 RR:{" "}
-                  <span className="font-semibold text-[#111827] dark:text-white">
-                    {maxRr} ms
-                  </span>
-                </li>
+                {hrv ? (
+                  <>
+                    <li>
+                      SDNN:{" "}
+                      <span className="font-semibold text-[#111827] dark:text-white">
+                        {hrv.sdnn} ms
+                      </span>
+                    </li>
+                    <li>
+                      RMSSD:{" "}
+                      <span className="font-semibold text-[#111827] dark:text-white">
+                        {hrv.rmssd} ms
+                      </span>
+                    </li>
+                    <li>
+                      pNN50:{" "}
+                      <span className="font-semibold text-[#111827] dark:text-white">
+                        {hrv.pnn50}%
+                      </span>
+                    </li>
+                  </>
+                ) : null}
                 <li>
                   샘플 수:{" "}
                   <span className="font-semibold text-[#111827] dark:text-white">
@@ -272,7 +313,17 @@ export default function SummaryPage() {
             <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-[#9CA3AF] dark:text-slate-500">
               <span>우세: <span className="font-semibold text-[#111827] dark:text-white">{fftBands.dominant}</span></span>
               <span>·</span>
-              <span>{state.fftBandHistory.length} epochs · 평균 {fftBands.rawTheta.toFixed(1)} / {fftBands.rawAlpha.toFixed(1)} / {fftBands.rawBeta.toFixed(1)}</span>
+              <span>{state.fftBandHistory.length} epochs</span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-[#F8FAFC] p-3 dark:bg-slate-800/50 text-center">
+                <p className="text-lg font-bold text-[#06B6D4]">{fftBands.faa > 0 ? "+" : ""}{fftBands.faa.toFixed(3)}</p>
+                <p className="text-[10px] font-semibold text-[#6B7280] dark:text-slate-400 mt-1">FAA</p>
+              </div>
+              <div className="rounded-xl bg-[#F8FAFC] p-3 dark:bg-slate-800/50 text-center">
+                <p className="text-lg font-bold text-[#F59E0B]">{fftBands.concentrationIdx.toFixed(2)}</p>
+                <p className="text-[10px] font-semibold text-[#6B7280] dark:text-slate-400 mt-1">β/α</p>
+              </div>
             </div>
           </div>
         ) : null}

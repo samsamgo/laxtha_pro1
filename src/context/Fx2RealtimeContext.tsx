@@ -121,15 +121,19 @@ export const Fx2RealtimeProvider = ({ children }: PropsWithChildren) => {
   const FFT_BAND_HISTORY_MAX = 120; // 120 epochs ≈ 4 minutes
 
   const appendFftEpochToState = (prev: Fx2State, epoch: FftEpoch): Fx2State => {
+    const ch1Alpha = epoch.bands.ch1.alpha;
+    const ch2Alpha = epoch.bands.ch2.alpha;
     const bandEntry = {
       timestamp: epoch.endedAt,
       theta: (epoch.bands.ch1.theta + epoch.bands.ch2.theta) / 2,
-      alpha: (epoch.bands.ch1.alpha + epoch.bands.ch2.alpha) / 2,
+      alpha: (ch1Alpha + ch2Alpha) / 2,
       beta: (
         (epoch.bands.ch1.lBeta + epoch.bands.ch1.mBeta + epoch.bands.ch1.hBeta) +
         (epoch.bands.ch2.lBeta + epoch.bands.ch2.mBeta + epoch.bands.ch2.hBeta)
       ) / 2,
       gamma: (epoch.bands.ch1.gamma + epoch.bands.ch2.gamma) / 2,
+      ch1Alpha,
+      ch2Alpha,
     };
     return {
       ...prev,

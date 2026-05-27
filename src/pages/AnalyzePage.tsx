@@ -144,7 +144,31 @@ export default function AnalyzePage() {
     const sc = calcScores(bands, avgBpm);
     const st = calcState(bands, sc, eegRate, satRate);
     const dom = dominantBand(bands);
-    return { bands, sc, st, dom, avgBpm, eegRate, sigRate };
+
+    const validRr = sam.filter((s) => s.rrInterval > 0).map((s) => s.rrInterval);
+    let hrvData: { avgRr: number; sdnn: number; rmssd: number; pnn50: number } | null = null;
+    if (validRr.length >= 2) {
+      const rrN = validRr.length;
+      const rrSum = validRr.reduce((a, b) => a + b, 0);
+      const rrMean = rrSum / rrN;
+      let varS = 0, sqD = 0, nn50 = 0;
+      for (let i = 0; i < rrN; i++) {
+        varS += (validRr[i] - rrMean) ** 2;
+        if (i > 0) {
+          const d = validRr[i] - validRr[i - 1];
+          sqD += d * d;
+          if (Math.abs(d) > 50) nn50++;
+        }
+      }
+      hrvData = {
+        avgRr: Math.round(rrMean),
+        sdnn: Math.round(Math.sqrt(varS / (rrN - 1)) * 10) / 10,
+        rmssd: Math.round(Math.sqrt(sqD / (rrN - 1)) * 10) / 10,
+        pnn50: Math.round((nn50 / (rrN - 1)) * 100 * 10) / 10,
+      };
+    }
+
+    return { bands, sc, st, dom, avgBpm, eegRate, sigRate, hrvData };
   }, [session]);
 
   const shareText = useMemo(() => {
@@ -231,7 +255,7 @@ export default function AnalyzePage() {
     );
   }
 
-  const { bands, sc, st, dom, avgBpm } = result;
+  const { bands, sc, st, dom, avgBpm, hrvData } = result;
   const info = STATE_INFO[st];
 
   // ── 결과 ──
@@ -307,6 +331,37 @@ export default function AnalyzePage() {
             </p>
           </div>
         </section>
+
+        {/* HRV */}
+        {hrvData ? (() => {
+          const hrvState = hrvData.rmssd >= 40
+            ? { emoji: "😌", label: "몸이 편안하게 쉬고 있어요", color: "#22C55E", detail: "심장 박동이 유연하게 변하고 있어서, 긴장 없이 편안한 상태입니다." }
+            : hrvData.rmssd >= 20
+            ? { emoji: "🙂", label: "보통 상태예요", color: "#F59E0B", detail: "특별히 긴장하거나 피곤하지 않은 평범한 컨디션입니다." }
+            : { emoji: "😰", label: "몸이 좀 긴장하고 있어요", color: "#EF4444", detail: "심장 박동이 일정해서, 스트레스를 받고 있거나 피로가 쌓여 있을 수 있습니다." };
+          return (
+            <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3 text-center py-6">
+              <p className="text-3xl">{hrvState.emoji}</p>
+              <p className="mt-2 text-lg font-bold text-[#111827] dark:text-white">{hrvState.label}</p>
+              <p className="mt-1 text-sm text-[#6B7280] dark:text-slate-300 max-w-xs mx-auto">{hrvState.detail}</p>
+              <div className="mt-5 flex justify-center gap-6">
+                <div>
+                  <p className="text-xl font-bold" style={{ color: hrvState.color }}>{hrvData.sdnn}</p>
+                  <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">SDNN</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold" style={{ color: hrvState.color }}>{hrvData.rmssd}</p>
+                  <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">RMSSD</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold" style={{ color: hrvState.color }}>{hrvData.pnn50}%</p>
+                  <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">pNN50</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-[#9CA3AF] dark:text-slate-500">평균 심박 간격 {hrvData.avgRr}ms</p>
+            </section>
+          );
+        })() : null}
 
         {/* 하단 */}
         <section className="fx2-card fx2-outline space-y-3 lg:col-span-8 lg:col-start-3">

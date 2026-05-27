@@ -747,35 +747,23 @@ export default function LivePage() {
             />
             <FftBandChart data={secondary.fftBandHistory} />
             <LineChartCard
-              values={(() => {
-                const len = Math.min(secondary.ch1.length, secondary.ch2.length);
-                const out: number[] = [];
-                for (let i = 0; i < len; i++) {
-                  const v1 = secondary.ch1[i], v2 = secondary.ch2[i];
-                  if (Number.isFinite(v1) && Number.isFinite(v2)) out.push(Math.abs(v1) - Math.abs(v2));
-                }
-                return out;
-              })()}
-              timestamps={(() => {
-                const len = Math.min(secondary.ch1.length, secondary.ch2.length, secondary.timestamps.length);
-                const out: number[] = [];
-                for (let i = 0; i < len; i++) {
-                  if (Number.isFinite(secondary.ch1[i]) && Number.isFinite(secondary.ch2[i])) out.push(secondary.timestamps[i]);
-                }
-                return out;
-              })()}
+              values={secondary.fftBandHistory.map((e) => {
+                const sum = e.ch1Alpha + e.ch2Alpha;
+                return sum > 0 ? (e.ch2Alpha - e.ch1Alpha) / sum : 0;
+              })}
+              timestamps={secondary.fftBandHistory.map((e) => e.timestamp)}
               color="#06B6D4"
-              label="좌우뇌 비대칭 (μV)"
-              description="CH1−CH2 진폭 차이. 0 근처면 좌우 균형."
-              windowSeconds={30}
+              label="좌우뇌 알파 비대칭 (FAA)"
+              description="+면 우뇌 알파 우세(접근 성향), −면 좌뇌 우세(회피 성향)."
+              windowSeconds={120}
             />
             <LineChartCard
-              values={secondary.pc}
-              timestamps={secondary.timestamps.slice(0, secondary.pc.length)}
-              color="#F97316"
-              label="PC (0–31)"
-              description="패킷 순환 카운터. 0→31 반복."
-              windowSeconds={30}
+              values={secondary.fftBandHistory.map((e) => e.alpha > 0 ? e.beta / e.alpha : 0)}
+              timestamps={secondary.fftBandHistory.map((e) => e.timestamp)}
+              color="#F59E0B"
+              label="집중도 추이 (β/α)"
+              description="Beta/Alpha 비율. 높을수록 집중, 낮으면 이완."
+              windowSeconds={120}
             />
           </div>
         ) : null}

@@ -18,7 +18,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 interface Bands { theta: number; alpha: number; beta: number; gamma: number }
 // 참고 지표 (Valence-Arousal에서 파생)
 interface Scores { focus: number; relax: number; tension: number; fatigue: number }
-type StateLabel = "활기·긍정" | "긴장·각성" | "이완·안정" | "저각성·피로" | "중립·균형" | "신호 점검";
+type StateLabel = "활기·긍정" | "긴장·예민" | "편안·안정" | "나른·피로" | "평온·중립" | "신호 점검";
 type ConfLabel = "높음" | "중간" | "낮음";
 
 interface Analysis {
@@ -106,9 +106,9 @@ function calcState(valence: number, arousal: number, eegRate: number, satRate: n
   if (eegRate < 30 || satRate > 25 || validEpochs < 2) return "신호 점검";
   const aHigh = arousal >= 0.58, aLow = arousal <= 0.42;
   const vNeg = valence <= -0.1;
-  if (aHigh) return vNeg ? "긴장·각성" : "활기·긍정";
-  if (aLow) return vNeg ? "저각성·피로" : "이완·안정";
-  return "중립·균형";
+  if (aHigh) return vNeg ? "긴장·예민" : "활기·긍정";
+  if (aLow) return vNeg ? "나른·피로" : "편안·안정";
+  return "평온·중립";
 }
 
 // ── 신뢰도 ──
@@ -128,27 +128,19 @@ function calcConfidence(args: {
 }
 
 // ── 표시 메타 ──
-const STATE_INFO: Record<StateLabel, { emoji: string; color: string; desc: string; tip: string }> = {
-  "활기·긍정": { emoji: "✨", color: "#2563EB", desc: "각성도가 높고 좌측 전전두 활성이 우세해, 긍정·접근 경향이 추정됩니다.", tip: "몰입이 잘 되는 시간대예요. 중요한 일을 이어가 보세요." },
-  "긴장·각성": { emoji: "⚡", color: "#EF4444", desc: "각성도가 높고 우측 전전두 활성이 우세해, 긴장·회피 경향이 추정됩니다.", tip: "심호흡이나 짧은 휴식으로 각성을 낮춰보세요." },
-  "이완·안정": { emoji: "😌", color: "#22C55E", desc: "각성도가 낮고 알파가 우세해, 편안하고 안정된 경향이 추정됩니다.", tip: "휴식·명상에 좋은 상태입니다. 잠시 유지해 보세요." },
-  "저각성·피로": { emoji: "😴", color: "#F59E0B", desc: "각성도가 낮고 세타가 우세해, 피로·졸림 경향이 추정됩니다.", tip: "환기하거나 짧은 휴식을 취해보세요." },
-  "중립·균형": { emoji: "🙂", color: "#06B6D4", desc: "특정 방향으로 치우치지 않은 균형 상태로 추정됩니다.", tip: "특별히 조정할 필요 없는 평이한 컨디션이에요." },
-  "신호 점검": { emoji: "🔧", color: "#64748B", desc: "측정 신호가 불안정해 감정 추정을 보류합니다.", tip: "전극을 다시 부착하고 안정된 상태에서 재측정해 주세요." },
+const STATE_INFO: Record<StateLabel, { emoji: string; color: string; headline: string; desc: string; tip: string }> = {
+  "활기·긍정": { emoji: "✨", color: "#2563EB", headline: "기분 좋고 활력이 넘쳐요", desc: "지금 당신은 의욕적이고 활기찬 상태예요. 무언가에 몰입하기 딱 좋아요.", tip: "지금 흐름을 살려 중요한 일을 이어가 보세요." },
+  "긴장·예민": { emoji: "⚡", color: "#EF4444", headline: "긴장하고 예민한 상태예요", desc: "지금 당신은 신경이 곤두서 있어요. 마음이 분주하거나 스트레스를 느끼고 있을 수 있어요.", tip: "잠깐 심호흡하거나 가볍게 스트레칭해 보세요." },
+  "편안·안정": { emoji: "😌", color: "#22C55E", headline: "편안하고 안정돼 있어요", desc: "지금 당신은 마음이 차분하고 여유로운 상태예요. 기분 좋게 이완돼 있어요.", tip: "휴식이나 명상에 좋은 시간이에요. 잠시 즐겨보세요." },
+  "나른·피로": { emoji: "😴", color: "#F59E0B", headline: "나른하고 피곤해 보여요", desc: "지금 당신은 에너지가 가라앉아 졸리거나 피곤한 상태예요.", tip: "환기하거나 짧게 눈을 붙여 쉬어보세요." },
+  "평온·중립": { emoji: "🙂", color: "#06B6D4", headline: "평온한 보통 상태예요", desc: "지금 당신은 특별히 들뜨거나 가라앉지 않은 평온한 상태예요.", tip: "편안한 기본 컨디션이에요. 하던 일을 이어가도 좋아요." },
+  "신호 점검": { emoji: "🔧", color: "#64748B", headline: "측정이 조금 불안정해요", desc: "신호가 흔들려 지금 상태를 정확히 읽기 어려워요.", tip: "전극을 다시 맞추고 편하게 앉아 다시 측정해 보세요." },
 };
 
 const CONF_CLR: Record<ConfLabel, string> = { "높음": "#22C55E", "중간": "#F59E0B", "낮음": "#EF4444" };
 
-const BAND_CLR = { theta: "#8B5CF6", alpha: "#22C55E", beta: "#F59E0B" };
-const BAND_KR: Record<string, string> = { theta: "세타", alpha: "알파", beta: "베타" };
-const BAND_DESC: Record<string, string> = { theta: "졸림·명상", alpha: "편안·안정", beta: "사고·집중" };
-
-const SCORE_META: { key: keyof Scores; label: string; color: string }[] = [
-  { key: "focus", label: "집중도", color: "#2563EB" },
-  { key: "relax", label: "이완도", color: "#22C55E" },
-  { key: "tension", label: "긴장도", color: "#EF4444" },
-  { key: "fatigue", label: "피로도", color: "#F59E0B" },
-];
+const moodLabel = (v: number) => (v >= 0.1 ? "좋음" : v <= -0.1 ? "안 좋음" : "보통");
+const energyLabel = (a: number) => (a >= 0.58 ? "활발" : a <= 0.42 ? "차분" : "보통");
 
 export default function AnalyzePage() {
   const [session, setSession] = useState<EegSessionExport | null>(null);
@@ -235,21 +227,18 @@ export default function AnalyzePage() {
 
   const shareText = useMemo(() => {
     if (!session || !result) return "";
-    const { an, st, conf } = result;
+    const { an, st } = result;
     const info = STATE_INFO[st];
-    const vTxt = an.valence >= 0.1 ? "긍정" : an.valence <= -0.1 ? "부정" : "중립";
-    const aTxt = an.arousal >= 0.58 ? "높음" : an.arousal <= 0.42 ? "낮음" : "중간";
     return [
-      `${info.emoji} ${st} (신뢰도 ${conf.label})`,
+      `${info.emoji} ${st}`,
+      info.headline,
       ``,
       info.desc,
       ``,
-      `정서가(valence): ${vTxt} · 각성도(arousal): ${aTxt}`,
-      `전전두 알파 비대칭 FAA ${an.faa >= 0 ? "+" : ""}${an.faa.toFixed(2)}`,
-      `세타 ${an.bands.theta.toFixed(1)}% | 알파 ${an.bands.alpha.toFixed(1)}% | 베타 ${an.bands.beta.toFixed(1)}%`,
-      ``,
+      `기분 ${moodLabel(an.valence)} · 에너지 ${energyLabel(an.arousal)}`,
       `${new Date(session.startedAt).toLocaleDateString("ko-KR")} ${formatMs(session.durationMs)} 측정`,
-      `※ 연구기반 추정치이며 의료 진단이 아닙니다.`,
+      ``,
+      `※ 뇌파 기반 추정치 (의료 진단 아님)`,
       `#뇌파분석 #LAXTHA`,
     ].filter(Boolean).join("\n");
   }, [session, result]);
@@ -318,180 +307,80 @@ export default function AnalyzePage() {
     );
   }
 
-  const { an, st, conf, avgBpm, eegRate, satRate, hrvData } = result;
+  const { an, st, conf, avgBpm } = result;
   const info = STATE_INFO[st];
-  const bands = an.bands;
 
-  // V-A 좌표 (0~100%)
+  // 기분 지도 좌표 (0~100%)
   const dotLeft = ((an.valence + 1) / 2) * 100;
   const dotTop = (1 - an.arousal) * 100;
-  const vTxt = an.valence >= 0.1 ? "긍정" : an.valence <= -0.1 ? "부정" : "중립";
-  const aTxt = an.arousal >= 0.58 ? "높음" : an.arousal <= 0.42 ? "낮음" : "중간";
-
-  // FAA 막대 정규화
-  const alphaMax = Math.max(an.alphaL, an.alphaR, 1e-6);
-  const barL = (an.alphaL / alphaMax) * 100;
-  const barR = (an.alphaR / alphaMax) * 100;
-  const faaDir = an.faa >= 0.05 ? "좌측 우세 → 접근·긍정 경향" : an.faa <= -0.05 ? "우측 우세 → 회피·부정 경향" : "좌우 균형 → 중립";
+  const moodTxt = moodLabel(an.valence);
+  const energyTxt = energyLabel(an.arousal);
 
   // ── 결과 ──
   return (
     <>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {/* 상태 카드 */}
-        <section className="fx2-card fx2-outline text-center py-8 lg:col-span-8 lg:col-start-3">
-          <p className="text-5xl">{info.emoji}</p>
-          <h2 className="mt-3 text-2xl font-bold text-[#111827] dark:text-white">{st}</h2>
-          <span
-            className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold"
-            style={{ backgroundColor: `${CONF_CLR[conf.label]}1A`, color: CONF_CLR[conf.label] }}
-          >
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CONF_CLR[conf.label] }} />
-            신뢰도 {conf.label} ({conf.score})
-          </span>
-          <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-300 max-w-sm mx-auto leading-relaxed">{info.desc}</p>
-          <p className="mt-3 inline-block rounded-full bg-[#EAF0F8] px-4 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">{info.tip}</p>
-          <p className="mt-3 text-[10px] text-[#9CA3AF] dark:text-slate-500">
-            {new Date(session.startedAt).toLocaleString("ko-KR")} · {formatMs(session.durationMs)}{avgBpm > 0 ? ` · ${avgBpm}bpm` : ""}
-          </p>
+        {/* 현재 상태 히어로 */}
+        <section
+          className="fx2-card fx2-outline text-center py-10 lg:col-span-6 lg:col-start-4"
+          style={{ background: `radial-gradient(120% 80% at 50% 0%, ${info.color}14, transparent 70%)` }}
+        >
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full text-6xl" style={{ backgroundColor: `${info.color}1A` }}>
+            {info.emoji}
+          </div>
+          <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#9CA3AF] dark:text-slate-500">지금 당신은</p>
+          <h2 className="mt-1 text-3xl font-extrabold" style={{ color: info.color }}>{st}</h2>
+          <p className="mt-2 text-base font-semibold text-[#111827] dark:text-white">{info.headline}</p>
+          <p className="mt-3 text-sm text-[#6B7280] dark:text-slate-300 max-w-xs mx-auto leading-relaxed">{info.desc}</p>
+          <p className="mt-4 inline-block rounded-full bg-[#EAF0F8] px-4 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">💡 {info.tip}</p>
+          <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-[#9CA3AF] dark:text-slate-500">
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ backgroundColor: `${CONF_CLR[conf.label]}1A`, color: CONF_CLR[conf.label] }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CONF_CLR[conf.label] }} />신뢰도 {conf.label}
+            </span>
+            <span>·</span>
+            <span>{new Date(session.startedAt).toLocaleDateString("ko-KR")} {formatMs(session.durationMs)}{avgBpm > 0 ? ` · ${avgBpm}bpm` : ""}</span>
+          </div>
         </section>
 
-        {/* Valence–Arousal 2D 좌표 */}
-        <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 text-center">정서 좌표 (Valence–Arousal)</p>
-          <div className="relative mx-auto mt-4 aspect-square w-full max-w-[260px] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+        {/* 기분 지도 */}
+        <section className="fx2-card fx2-outline lg:col-span-6 lg:col-start-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 text-center">기분 지도</p>
+          <div className="relative mx-auto mt-4 aspect-square w-full max-w-[240px] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
             {/* 사분면 틴트 */}
             <div className="absolute left-0 top-0 h-1/2 w-1/2 bg-red-500/5" />
             <div className="absolute right-0 top-0 h-1/2 w-1/2 bg-blue-500/5" />
             <div className="absolute left-0 bottom-0 h-1/2 w-1/2 bg-amber-500/5" />
             <div className="absolute right-0 bottom-0 h-1/2 w-1/2 bg-green-500/5" />
+            {/* 사분면 이름 */}
+            <span className="absolute left-2.5 top-2 text-[9px] font-semibold text-red-400">긴장·예민</span>
+            <span className="absolute right-2.5 top-2 text-[9px] font-semibold text-blue-400">활기·긍정</span>
+            <span className="absolute left-2.5 bottom-2 text-[9px] font-semibold text-amber-500">나른·피로</span>
+            <span className="absolute right-2.5 bottom-2 text-[9px] font-semibold text-green-500">편안·안정</span>
             {/* 축 */}
             <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-300 dark:border-slate-600" />
             <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-gray-300 dark:border-slate-600" />
-            {/* 축 레이블 */}
-            <span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">높은 각성</span>
-            <span className="absolute left-1/2 bottom-1 -translate-x-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">낮은 각성</span>
-            <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">부정</span>
-            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">긍정</span>
-            {/* 좌표점 */}
-            <div
-              className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white shadow dark:ring-slate-900 transition-all"
-              style={{ left: `${dotLeft}%`, top: `${dotTop}%`, backgroundColor: info.color }}
-            />
-          </div>
-          <div className="mt-4 flex justify-center gap-8">
-            <div className="text-center">
-              <p className="text-lg font-bold" style={{ color: info.color }}>{vTxt}</p>
-              <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">정서가 (FAA {an.faa >= 0 ? "+" : ""}{an.faa.toFixed(2)})</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold" style={{ color: info.color }}>{aTxt}</p>
-              <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">각성도 {an.arousalFromHrv ? "(EEG+HRV)" : "(EEG)"}</p>
+            {/* 현재 위치 (펄스) */}
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 transition-all" style={{ left: `${dotLeft}%`, top: `${dotTop}%` }}>
+              <span className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full opacity-40" style={{ backgroundColor: info.color }} />
+              <span className="relative block h-4 w-4 rounded-full ring-2 ring-white shadow dark:ring-slate-900" style={{ backgroundColor: info.color }} />
             </div>
           </div>
-        </section>
-
-        {/* 좌우 알파 비대칭 (FAA) */}
-        <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">전전두 알파 비대칭</p>
-          <div className="mt-3 space-y-2.5">
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-[11px] text-[#6B7280] dark:text-slate-400">좌 (CH1)</span>
-              <div className="relative h-2.5 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
-                <div className="absolute inset-y-0 left-0 rounded-full bg-[#06B6D4]" style={{ width: `${barL}%` }} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-[11px] text-[#6B7280] dark:text-slate-400">우 (CH2)</span>
-              <div className="relative h-2.5 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
-                <div className="absolute inset-y-0 left-0 rounded-full bg-[#2563EB]" style={{ width: `${barR}%` }} />
-              </div>
-            </div>
+          {/* 축 의미 */}
+          <div className="mt-3 flex justify-between px-1 text-[10px] text-[#9CA3AF] dark:text-slate-500">
+            <span>← 기분 안 좋음</span><span>기분 좋음 →</span>
           </div>
-          <p className="mt-3 text-center text-xs font-semibold text-[#111827] dark:text-white">{faaDir}</p>
-          <p className="mt-1 text-center text-[10px] text-[#9CA3AF] dark:text-slate-500 leading-relaxed">
-            알파 파워는 피질 활성과 역상관 · 이마 2채널 기반 전전두 추정치 (정통 F3/F4 아님)
-          </p>
-        </section>
-
-        {/* 주파수 대역 분포 */}
-        <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 text-center">주파수 대역 분포</p>
-          <div className="mt-4 flex h-4 overflow-hidden rounded-full">
-            {(["theta", "alpha", "beta"] as const).map((b) => (
-              <div key={b} style={{ width: `${bands[b]}%`, backgroundColor: BAND_CLR[b] }} className="transition-all" />
-            ))}
+          <p className="mt-1 text-center text-[10px] text-[#9CA3AF] dark:text-slate-500">위 = 활발 · 아래 = 차분</p>
+          {/* 한 줄 요약 */}
+          <div className="mt-4 flex justify-center gap-3">
+            <span className="rounded-full bg-[#F8FAFC] px-3 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">기분 {moodTxt}</span>
+            <span className="rounded-full bg-[#F8FAFC] px-3 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">에너지 {energyTxt}</span>
           </div>
-          <div className="mt-3 flex justify-center gap-5">
-            {(["theta", "alpha", "beta"] as const).map((b) => (
-              <div key={b} className="text-center">
-                <div className="flex items-center justify-center gap-1.5">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: BAND_CLR[b] }} />
-                  <span className="text-xs font-semibold text-[#111827] dark:text-white">{bands[b].toFixed(1)}%</span>
-                </div>
-                <p className="text-[10px] text-[#6B7280] dark:text-slate-400">{BAND_KR[b]}</p>
-                <p className="text-[9px] text-[#9CA3AF] dark:text-slate-500">{BAND_DESC[b]}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-center text-[10px] text-[#9CA3AF] dark:text-slate-500">우세: {an.dom === "Theta" ? "세타" : an.dom === "Alpha" ? "알파" : an.dom === "Beta" ? "베타" : "혼합"} · Delta 미측정</p>
         </section>
-
-        {/* 참고 지표 */}
-        <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 mb-3">참고 지표</p>
-          <div className="space-y-2">
-            {SCORE_META.map(({ key, label, color }) => (
-              <div key={key} className="flex items-center gap-2">
-                <span className="w-12 text-[11px] text-[#6B7280] dark:text-slate-400">{label}</span>
-                <div className="relative h-2 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
-                  <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{ width: `${an.scores[key]}%`, backgroundColor: color }} />
-                </div>
-                <span className="w-7 text-right text-xs font-bold text-[#111827] dark:text-white">{an.scores[key]}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-[10px] text-[#9CA3AF] dark:text-slate-500 leading-relaxed">
-            ※ 참고 지표는 Valence–Arousal 추정에서 파생된 보조 수치입니다. 신호 유효율 {eegRate}%{satRate > 0 ? ` · 포화 ${satRate}%` : ""}.
-          </p>
-        </section>
-
-        {/* HRV */}
-        {hrvData ? (() => {
-          const hrvState = hrvData.rmssd >= 40
-            ? { emoji: "😌", label: "몸이 편안하게 쉬고 있어요", color: "#22C55E", detail: "심장 박동이 유연하게 변하고 있어서, 긴장 없이 편안한 상태입니다." }
-            : hrvData.rmssd >= 20
-            ? { emoji: "🙂", label: "보통 상태예요", color: "#F59E0B", detail: "특별히 긴장하거나 피곤하지 않은 평범한 컨디션입니다." }
-            : { emoji: "😰", label: "몸이 좀 긴장하고 있어요", color: "#EF4444", detail: "심장 박동이 일정해서, 스트레스를 받고 있거나 피로가 쌓여 있을 수 있습니다." };
-          return (
-            <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3 text-center py-6">
-              <p className="text-3xl">{hrvState.emoji}</p>
-              <p className="mt-2 text-lg font-bold text-[#111827] dark:text-white">{hrvState.label}</p>
-              <p className="mt-1 text-sm text-[#6B7280] dark:text-slate-300 max-w-xs mx-auto">{hrvState.detail}</p>
-              <div className="mt-5 flex justify-center gap-6">
-                <div>
-                  <p className="text-xl font-bold" style={{ color: hrvState.color }}>{hrvData.sdnn}</p>
-                  <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">SDNN</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold" style={{ color: hrvState.color }}>{hrvData.rmssd}</p>
-                  <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">RMSSD</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold" style={{ color: hrvState.color }}>{hrvData.pnn50}%</p>
-                  <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">pNN50</p>
-                </div>
-              </div>
-              <p className="mt-2 text-[10px] text-[#9CA3AF] dark:text-slate-500">평균 심박 간격 {hrvData.avgRr}ms</p>
-            </section>
-          );
-        })() : null}
 
         {/* 하단 */}
-        <section className="fx2-card fx2-outline space-y-3 lg:col-span-8 lg:col-start-3">
+        <section className="fx2-card fx2-outline space-y-3 lg:col-span-6 lg:col-start-4">
           <p className="text-[10px] text-center text-[#9CA3AF] dark:text-slate-500 leading-relaxed">
-            ※ 본 결과는 전전두 알파 비대칭(FAA)·Valence–Arousal 모델에 기반한 <b>연구기반 추정치</b>이며, 감정의 직접 판독이나 의료 진단이 아닙니다.
-            단일 측정·이마 2채널·개인 baseline 부재로 인한 한계가 있습니다.
+            ※ 뇌파 기반 추정치이며 의료 진단이 아닙니다. 자세한 수치는 요약에서 확인하세요.
           </p>
           <div className="flex gap-2">
             <button type="button" onClick={() => { setCopied(false); setModal(true); }}
@@ -520,12 +409,11 @@ export default function AnalyzePage() {
             {/* 미리보기 카드 */}
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800">
               <p className="text-center text-2xl">{info.emoji}</p>
-              <p className="text-center text-sm font-bold text-[#111827] dark:text-white mt-1">{st}</p>
-              <p className="text-center text-[11px] mt-1" style={{ color: CONF_CLR[conf.label] }}>신뢰도 {conf.label} · 정서가 {vTxt} · 각성 {aTxt}</p>
-              <div className="mt-2 flex justify-center gap-3 text-[11px]">
-                {(["theta", "alpha", "beta"] as const).map((b) => (
-                  <span key={b} style={{ color: BAND_CLR[b] }} className="font-semibold">{BAND_KR[b]} {bands[b].toFixed(1)}%</span>
-                ))}
+              <p className="text-center text-sm font-bold mt-1" style={{ color: info.color }}>{st}</p>
+              <p className="text-center text-[11px] text-[#6B7280] dark:text-slate-300 mt-0.5">{info.headline}</p>
+              <div className="mt-2 flex justify-center gap-3 text-[11px] font-semibold text-[#374151] dark:text-slate-200">
+                <span>기분 {moodTxt}</span>
+                <span>에너지 {energyTxt}</span>
               </div>
             </div>
 

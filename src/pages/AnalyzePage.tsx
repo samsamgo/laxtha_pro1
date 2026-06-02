@@ -142,6 +142,13 @@ const CONF_CLR: Record<ConfLabel, string> = { "높음": "#22C55E", "중간": "#F
 const moodLabel = (v: number) => (v >= 0.1 ? "좋음" : v <= -0.1 ? "안 좋음" : "보통");
 const energyLabel = (a: number) => (a >= 0.58 ? "활발" : a <= 0.42 ? "차분" : "보통");
 
+const SCORE_META: { key: keyof Scores; label: string; color: string }[] = [
+  { key: "focus", label: "집중도", color: "#2563EB" },
+  { key: "relax", label: "이완도", color: "#22C55E" },
+  { key: "tension", label: "긴장도", color: "#EF4444" },
+  { key: "fatigue", label: "피로도", color: "#F59E0B" },
+];
+
 export default function AnalyzePage() {
   const [session, setSession] = useState<EegSessionExport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -374,6 +381,22 @@ export default function AnalyzePage() {
           <div className="mt-4 flex justify-center gap-3">
             <span className="rounded-full bg-[#F8FAFC] px-3 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">기분 {moodTxt}</span>
             <span className="rounded-full bg-[#F8FAFC] px-3 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">에너지 {energyTxt}</span>
+          </div>
+        </section>
+
+        {/* 상태 점수 */}
+        <section className="fx2-card fx2-outline lg:col-span-6 lg:col-start-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 mb-3 text-center">상태 점수</p>
+          <div className="space-y-2.5">
+            {SCORE_META.map(({ key, label, color }) => (
+              <div key={key} className="flex items-center gap-2">
+                <span className="w-12 text-[11px] text-[#6B7280] dark:text-slate-400">{label}</span>
+                <div className="relative h-2 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
+                  <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{ width: `${an.scores[key]}%`, backgroundColor: color }} />
+                </div>
+                <span className="w-8 text-right text-xs font-bold text-[#111827] dark:text-white">{an.scores[key]}</span>
+              </div>
+            ))}
           </div>
         </section>
 

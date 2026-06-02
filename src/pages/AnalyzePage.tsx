@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { EegSessionExport } from "../types/eegRecorder";
-import type { FftBandPowers } from "../lib/fftAccumulator";
 
 function validateJson(data: unknown): data is EegSessionExport {
   if (!data || typeof data !== "object") return false;
@@ -15,89 +14,140 @@ const formatMs = (ms: number) => {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 // ── 타입 ──
+// 주파수 대역(양 채널 평균, 상대비율 %) — 분포 표시용
 interface Bands { theta: number; alpha: number; beta: number; gamma: number }
-interface Scores { focus: number; fatigue: number; arousal: number; relax: number; tension: number }
-type StateLabel = "집중" | "안정 집중" | "이완" | "저각성 이완" | "피로/졸림" | "긴장/과각성" | "신호 점검";
+// 참고 지표 (Valence-Arousal에서 파생)
+interface Scores { focus: number; relax: number; tension: number; fatigue: number }
+type StateLabel = "활기·긍정" | "긴장·각성" | "이완·안정" | "저각성·피로" | "중립·균형" | "신호 점검";
+type ConfLabel = "높음" | "중간" | "낮음";
 
-// ── 대역 계산 ──
-function computeBands(session: EegSessionExport): Bands | null {
-  const ep = session.fftEpochs;
-  if (!ep?.length) return null;
-  let t = 0, a = 0, b = 0, g = 0, n = 0;
-  for (const e of ep) {
-    for (const ch of [e.bands.ch1, e.bands.ch2] as FftBandPowers[]) {
-      t += ch.theta; a += ch.alpha; b += ch.lBeta + ch.mBeta + ch.hBeta; g += ch.gamma; n++;
-    }
-  }
-  if (!n) return null;
-  t /= n; a /= n; b /= n; g /= n;
-  const base = t + a + b;
-  if (!base) return null;
-  return { theta: (t / base) * 100, alpha: (a / base) * 100, beta: (b / base) * 100, gamma: g };
+interface Analysis {
+  bands: Bands;            // 양 채널 평균 상대비율(%)
+  dom: string;             // 우세 대역
+  alphaL: number;          // 좌(CH1) 평균 알파 절대파워
+  alphaR: number;          // 우(CH2) 평균 알파 절대파워
+  faa: number;             // ln(αR) - ln(αL), 양수=좌측 활성 우세=접근/긍정
+  valence: number;         // -1(부정/회피) .. +1(긍정/접근)
+  arousal: number;         // 0(저각성) .. 1(고각성)
+  arousalFromHrv: boolean; // HRV가 각성 추정에 반영됐는지
+  scores: Scores;          // 참고 지표
+  validEpochs: number;
 }
 
-// ── 점수 ──
-function calcScores(r: Bands, bpm: number): Scores {
-  const bf = bpm > 0 ? clamp((bpm - 50) / 80, 0, 1) : 0.5;
-  const gn = clamp(r.gamma / 50, 0, 1);
+// ── 분석 엔진 ──
+// FFT epoch에서 좌/우 채널을 분리해 FAA(전전두 알파 비대칭)와 밴드 분포를 계산한다.
+function computeAnalysis(session: EegSessionExport): Analysis | null {
+  const ep = session.fftEpochs;
+  if (!ep?.length) return null;
+
+  let t = 0, a = 0, b = 0, g = 0, n = 0; // 양 채널 평균(분포용)
+  let aL = 0, aR = 0, ne = 0;            // 채널별 알파(FAA용): CH1=좌, CH2=우
+  for (const e of ep) {
+    const c1 = e.bands.ch1, c2 = e.bands.ch2;
+    for (const ch of [c1, c2]) {
+      t += ch.theta; a += ch.alpha; b += ch.lBeta + ch.mBeta + ch.hBeta; g += ch.gamma; n++;
+    }
+    aL += c1.alpha; aR += c2.alpha; ne++;
+  }
+  if (!n || !ne) return null;
+  t /= n; a /= n; b /= n; g /= n;
+  aL /= ne; aR /= ne;
+
+  const base = t + a + b;
+  if (!base) return null;
+  const relT = (t / base) * 100;
+  const relA = (a / base) * 100;
+  const relB = (b / base) * 100;
+
+  // ── FAA (전전두 알파 비대칭) ──
+  // 알파 파워는 피질 활성과 역상관(Klimesch 1999). 좌측 알파가 낮으면 좌측 활성↑ → 접근/긍정(Davidson; Coan & Allen 2004).
+  // 산식: FAA = ln(αR) - ln(αL) (Allen, Coan & Nazarian 2004). 양수 → 좌측 활성 우세.
+  const eps = 1e-6;
+  const faa = Math.log(aR + eps) - Math.log(aL + eps);
+  const valence = Math.tanh(faa * 1.5); // -1..1, 단일측정·이마 2채널이므로 경향치
+
+  // ── Arousal ──
+  // 고주파(beta)/알파 비는 각성·관여 지표로 보고됨. 알파 우세 → 저각성, 베타 우세 → 고각성.
+  const betaAlpha = b / (a + eps);
+  const arousalEeg = 1 / (1 + Math.exp(-(betaAlpha - 1) * 1.5)); // 0..1, center=1.0
+
+  // 참고 지표 (V-A + 밴드에서 파생)
+  const aPct = arousalEeg * 100;
+  const vPct = (valence + 1) / 2 * 100;
+  const gnorm = clamp(g / 50, 0, 1);
+  const scores: Scores = {
+    focus: clamp(Math.round(relB * 1.0 - relT * 0.4 + (aPct - 50) * 0.4), 0, 100),
+    relax: clamp(Math.round(relA * 1.2 - (aPct - 50) * 0.5 + (vPct - 50) * 0.3), 0, 100),
+    tension: clamp(Math.round((aPct - 50) * 0.9 + (vPct < 50 ? (50 - vPct) * 0.6 : 0) + gnorm * 25), 0, 100),
+    fatigue: clamp(Math.round(relT * 1.1 - relB * 0.3 + (50 - aPct) * 0.4), 0, 100),
+  };
+
+  // 우세 대역
+  const m: [string, number][] = [["Theta", relT], ["Alpha", relA], ["Beta", relB]];
+  m.sort((x, y) => y[1] - x[1]);
+  const dom = m[0][1] - m[1][1] < 5 ? "Mixed" : m[0][0];
+
   return {
-    focus: clamp(Math.round(r.beta * 1.2 - r.theta * 0.5), 0, 100),
-    fatigue: clamp(Math.round(r.theta * 1.3 - r.beta * 0.4), 0, 100),
-    arousal: clamp(Math.round(r.beta * 0.8 + bf * 30), 0, 100),
-    relax: clamp(Math.round(r.alpha * 1.4 - gn * 20 - Math.abs(bpm - 70) * 0.3), 0, 100),
-    tension: clamp(Math.round(gn * 40 + (r.beta > 50 ? (r.beta - 50) * 0.8 : 0) + (bpm > 90 ? (bpm - 90) * 0.5 : 0)), 0, 100),
+    bands: { theta: relT, alpha: relA, beta: relB, gamma: g },
+    dom,
+    alphaL: aL,
+    alphaR: aR,
+    faa,
+    valence,
+    arousal: arousalEeg, // HRV 블렌드는 호출부에서 적용
+    arousalFromHrv: false,
+    scores,
+    validEpochs: ne,
   };
 }
 
-// ── 상태 판단 ──
-function calcState(r: Bands, s: Scores, eegRate: number, satRate: number): StateLabel {
-  if (eegRate < 20 || satRate > 20) return "신호 점검";
-  if (s.tension >= 60) return "긴장/과각성";
-
-  const thetaDom = r.theta > r.alpha && r.theta > r.beta;
-  const alphaDom = r.alpha >= r.theta && r.alpha >= r.beta;
-
-  if (thetaDom && s.fatigue >= 50) return "피로/졸림";
-  if (thetaDom && r.alpha > 20) return "저각성 이완";
-  if (alphaDom && s.relax >= 30) return "이완";
-  if (r.beta > 35 && r.alpha > 15 && s.focus >= 30) return "안정 집중";
-  if (r.beta > 35 && s.focus >= 40) return "집중";
-  if (thetaDom) return "피로/졸림";
-  if (alphaDom) return "이완";
-  return "안정 집중";
+// ── 상태 라벨 (V-A 사분면) ──
+function calcState(valence: number, arousal: number, eegRate: number, satRate: number, validEpochs: number): StateLabel {
+  if (eegRate < 30 || satRate > 25 || validEpochs < 2) return "신호 점검";
+  const aHigh = arousal >= 0.58, aLow = arousal <= 0.42;
+  const vNeg = valence <= -0.1;
+  if (aHigh) return vNeg ? "긴장·각성" : "활기·긍정";
+  if (aLow) return vNeg ? "저각성·피로" : "이완·안정";
+  return "중립·균형";
 }
 
-function dominantBand(r: Bands): string {
-  const m: [string, number][] = [["Theta", r.theta], ["Alpha", r.alpha], ["Beta", r.beta]];
-  m.sort((a, b) => b[1] - a[1]);
-  return m[0][1] - m[1][1] < 5 ? "Mixed" : m[0][0];
+// ── 신뢰도 ──
+// 단일 측정·baseline 없음 → 상한 90. 신호품질/유효 epoch/FAA 크기/PPG 유효성으로 감점.
+function calcConfidence(args: {
+  eegRate: number; satRate: number; validEpochs: number; faa: number; ppgValidRate: number;
+}): { score: number; label: ConfLabel } {
+  let c = 90;
+  if (args.eegRate < 60) c -= (60 - args.eegRate) * 0.5;
+  if (args.satRate > 10) c -= (args.satRate - 10) * 1.0;
+  if (args.validEpochs < 5) c -= (5 - args.validEpochs) * 6;
+  if (Math.abs(args.faa) < 0.05) c -= 15; // valence 신호 약함
+  if (args.ppgValidRate < 50) c -= 5;
+  c = clamp(Math.round(c), 5, 90);
+  const label: ConfLabel = c >= 65 ? "높음" : c >= 40 ? "중간" : "낮음";
+  return { score: c, label };
 }
 
-// ── 상태별 설명 (유저 친화적) ──
+// ── 표시 메타 ──
 const STATE_INFO: Record<StateLabel, { emoji: string; color: string; desc: string; tip: string }> = {
-  "집중": { emoji: "🎯", color: "#2563EB", desc: "뇌가 활발하게 일하고 있어요. 업무나 공부에 적합한 상태입니다.", tip: "지금 하던 일을 계속하세요!" },
-  "안정 집중": { emoji: "🧘‍♂️", color: "#06B6D4", desc: "긴장 없이 편안하게 집중하고 있어요. 가장 이상적인 상태입니다.", tip: "이 상태를 유지해 보세요." },
-  "이완": { emoji: "😌", color: "#22C55E", desc: "마음이 편안하고 이완된 상태예요. 휴식이 잘 되고 있습니다.", tip: "명상이나 가벼운 음악 감상에 좋아요." },
-  "저각성 이완": { emoji: "🌙", color: "#14B8A6", desc: "깊이 이완되어 있어요. 졸음이 올 수 있는 상태입니다.", tip: "잠시 눈을 감고 쉬어도 좋아요." },
-  "피로/졸림": { emoji: "😴", color: "#F59E0B", desc: "뇌의 활동이 낮아져 있어요. 피로가 쌓여 있을 수 있습니다.", tip: "잠깐 휴식을 취하거나 환기해 보세요." },
-  "긴장/과각성": { emoji: "⚡", color: "#EF4444", desc: "뇌가 과도하게 긴장하고 있어요. 스트레스 상태일 수 있습니다.", tip: "심호흡이나 스트레칭으로 긴장을 풀어보세요." },
-  "신호 점검": { emoji: "🔧", color: "#64748B", desc: "측정 신호가 불안정합니다. 전극 부착 상태를 확인해 주세요.", tip: "전극을 다시 부착하고 측정해 보세요." },
+  "활기·긍정": { emoji: "✨", color: "#2563EB", desc: "각성도가 높고 좌측 전전두 활성이 우세해, 긍정·접근 경향이 추정됩니다.", tip: "몰입이 잘 되는 시간대예요. 중요한 일을 이어가 보세요." },
+  "긴장·각성": { emoji: "⚡", color: "#EF4444", desc: "각성도가 높고 우측 전전두 활성이 우세해, 긴장·회피 경향이 추정됩니다.", tip: "심호흡이나 짧은 휴식으로 각성을 낮춰보세요." },
+  "이완·안정": { emoji: "😌", color: "#22C55E", desc: "각성도가 낮고 알파가 우세해, 편안하고 안정된 경향이 추정됩니다.", tip: "휴식·명상에 좋은 상태입니다. 잠시 유지해 보세요." },
+  "저각성·피로": { emoji: "😴", color: "#F59E0B", desc: "각성도가 낮고 세타가 우세해, 피로·졸림 경향이 추정됩니다.", tip: "환기하거나 짧은 휴식을 취해보세요." },
+  "중립·균형": { emoji: "🙂", color: "#06B6D4", desc: "특정 방향으로 치우치지 않은 균형 상태로 추정됩니다.", tip: "특별히 조정할 필요 없는 평이한 컨디션이에요." },
+  "신호 점검": { emoji: "🔧", color: "#64748B", desc: "측정 신호가 불안정해 감정 추정을 보류합니다.", tip: "전극을 다시 부착하고 안정된 상태에서 재측정해 주세요." },
 };
+
+const CONF_CLR: Record<ConfLabel, string> = { "높음": "#22C55E", "중간": "#F59E0B", "낮음": "#EF4444" };
 
 const BAND_CLR = { theta: "#8B5CF6", alpha: "#22C55E", beta: "#F59E0B" };
 const BAND_KR: Record<string, string> = { theta: "세타", alpha: "알파", beta: "베타" };
-const BAND_DESC: Record<string, string> = {
-  theta: "졸림·명상",
-  alpha: "편안·안정",
-  beta: "사고·집중",
-};
+const BAND_DESC: Record<string, string> = { theta: "졸림·명상", alpha: "편안·안정", beta: "사고·집중" };
 
 const SCORE_META: { key: keyof Scores; label: string; color: string }[] = [
   { key: "focus", label: "집중도", color: "#2563EB" },
-  { key: "fatigue", label: "피로도", color: "#F59E0B" },
-  { key: "arousal", label: "각성도", color: "#06B6D4" },
   { key: "relax", label: "이완도", color: "#22C55E" },
   { key: "tension", label: "긴장도", color: "#EF4444" },
+  { key: "fatigue", label: "피로도", color: "#F59E0B" },
 ];
 
 export default function AnalyzePage() {
@@ -126,12 +176,13 @@ export default function AnalyzePage() {
   const result = useMemo(() => {
     if (!session) return null;
     const sam = session.samples, len = sam.length;
-    let bS = 0, bN = 0, eN = 0, gN = 0, satN = 0;
+    let bS = 0, bN = 0, eN = 0, gN = 0, satN = 0, pN = 0;
     for (let i = 0; i < len; i++) {
       const s = sam[i];
       if (s.bpm > 0) { bS += s.bpm; bN++; }
       if (s.eegValid) eN++;
       if (s.signal === "good") gN++;
+      if (s.ppgValid) pN++;
       if ((s.ch1Saturation !== null && (s.ch1Saturation <= 16 || s.ch1Saturation >= 239)) ||
           (s.ch2Saturation !== null && (s.ch2Saturation <= 16 || s.ch2Saturation >= 239))) satN++;
     }
@@ -139,18 +190,17 @@ export default function AnalyzePage() {
     const eegRate = len > 0 ? Math.round((eN / len) * 100) : 0;
     const sigRate = len > 0 ? Math.round((gN / len) * 100) : 0;
     const satRate = len > 0 ? Math.round((satN / len) * 100) : 0;
-    const bands = computeBands(session);
-    if (!bands) return null;
-    const sc = calcScores(bands, avgBpm);
-    const st = calcState(bands, sc, eegRate, satRate);
-    const dom = dominantBand(bands);
+    const ppgValidRate = len > 0 ? Math.round((pN / len) * 100) : 0;
 
+    const an = computeAnalysis(session);
+    if (!an) return null;
+
+    // ── HRV ──
     const validRr = sam.filter((s) => s.rrInterval > 0).map((s) => s.rrInterval);
     let hrvData: { avgRr: number; sdnn: number; rmssd: number; pnn50: number } | null = null;
     if (validRr.length >= 2) {
       const rrN = validRr.length;
-      const rrSum = validRr.reduce((a, b) => a + b, 0);
-      const rrMean = rrSum / rrN;
+      const rrMean = validRr.reduce((p, q) => p + q, 0) / rrN;
       let varS = 0, sqD = 0, nn50 = 0;
       for (let i = 0; i < rrN; i++) {
         varS += (validRr[i] - rrMean) ** 2;
@@ -168,25 +218,38 @@ export default function AnalyzePage() {
       };
     }
 
-    return { bands, sc, st, dom, avgBpm, eegRate, sigRate, hrvData };
+    // ── Arousal: HRV 블렌드 (PPG가 충분히 유효할 때만) ──
+    let arousal = an.arousal;
+    let arousalFromHrv = false;
+    if (hrvData && ppgValidRate >= 50) {
+      const arousalHrv = clamp((40 - hrvData.rmssd) / 40, 0, 1); // RMSSD 낮을수록 각성↑
+      arousal = clamp(an.arousal * 0.7 + arousalHrv * 0.3, 0, 1);
+      arousalFromHrv = true;
+    }
+
+    const st = calcState(an.valence, arousal, eegRate, satRate, an.validEpochs);
+    const conf = calcConfidence({ eegRate, satRate, validEpochs: an.validEpochs, faa: an.faa, ppgValidRate });
+
+    return { an: { ...an, arousal, arousalFromHrv }, st, conf, avgBpm, eegRate, sigRate, satRate, ppgValidRate, hrvData };
   }, [session]);
 
   const shareText = useMemo(() => {
     if (!session || !result) return "";
-    const { bands: b, sc, st, dom, avgBpm } = result;
+    const { an, st, conf } = result;
     const info = STATE_INFO[st];
+    const vTxt = an.valence >= 0.1 ? "긍정" : an.valence <= -0.1 ? "부정" : "중립";
+    const aTxt = an.arousal >= 0.58 ? "높음" : an.arousal <= 0.42 ? "낮음" : "중간";
     return [
-      `${info.emoji} ${st}`,
+      `${info.emoji} ${st} (신뢰도 ${conf.label})`,
       ``,
       info.desc,
       ``,
-      `세타 ${b.theta.toFixed(1)}% | 알파 ${b.alpha.toFixed(1)}% | 베타 ${b.beta.toFixed(1)}%`,
-      `우세 대역: ${dom === "Theta" ? "세타" : dom === "Alpha" ? "알파" : dom === "Beta" ? "베타" : dom}`,
-      ``,
-      `집중 ${sc.focus} · 피로 ${sc.fatigue} · 이완 ${sc.relax} · 긴장 ${sc.tension}`,
-      avgBpm > 0 ? `심박 ${avgBpm}bpm` : "",
+      `정서가(valence): ${vTxt} · 각성도(arousal): ${aTxt}`,
+      `전전두 알파 비대칭 FAA ${an.faa >= 0 ? "+" : ""}${an.faa.toFixed(2)}`,
+      `세타 ${an.bands.theta.toFixed(1)}% | 알파 ${an.bands.alpha.toFixed(1)}% | 베타 ${an.bands.beta.toFixed(1)}%`,
       ``,
       `${new Date(session.startedAt).toLocaleDateString("ko-KR")} ${formatMs(session.durationMs)} 측정`,
+      `※ 연구기반 추정치이며 의료 진단이 아닙니다.`,
       `#뇌파분석 #LAXTHA`,
     ].filter(Boolean).join("\n");
   }, [session, result]);
@@ -218,7 +281,7 @@ export default function AnalyzePage() {
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827] dark:text-white">뇌파 분석</h2>
+            <h2 className="text-lg font-bold text-[#111827] dark:text-white">뇌파 감정 분석</h2>
             <p className="mt-1 text-sm text-[#6B7280] dark:text-slate-400">FX2 JSON 파일을 업로드하세요</p>
           </div>
           <div
@@ -248,15 +311,28 @@ export default function AnalyzePage() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <section className="fx2-card fx2-outline flex flex-col items-center gap-4 py-10 text-center lg:col-span-8 lg:col-start-3">
           <p className="text-lg font-bold text-[#111827] dark:text-white">FFT 데이터 없음</p>
-          <p className="text-sm text-[#6B7280] dark:text-slate-400">주파수 대역 분석에 FFT 데이터가 필요합니다.</p>
+          <p className="text-sm text-[#6B7280] dark:text-slate-400">감정 추정에는 주파수 대역(FFT) 데이터가 필요합니다.</p>
           <button type="button" onClick={reset} className="fx2-btn-primary !px-5 !py-2 !text-sm">다른 파일</button>
         </section>
       </div>
     );
   }
 
-  const { bands, sc, st, dom, avgBpm, hrvData } = result;
+  const { an, st, conf, avgBpm, eegRate, satRate, hrvData } = result;
   const info = STATE_INFO[st];
+  const bands = an.bands;
+
+  // V-A 좌표 (0~100%)
+  const dotLeft = ((an.valence + 1) / 2) * 100;
+  const dotTop = (1 - an.arousal) * 100;
+  const vTxt = an.valence >= 0.1 ? "긍정" : an.valence <= -0.1 ? "부정" : "중립";
+  const aTxt = an.arousal >= 0.58 ? "높음" : an.arousal <= 0.42 ? "낮음" : "중간";
+
+  // FAA 막대 정규화
+  const alphaMax = Math.max(an.alphaL, an.alphaR, 1e-6);
+  const barL = (an.alphaL / alphaMax) * 100;
+  const barR = (an.alphaR / alphaMax) * 100;
+  const faaDir = an.faa >= 0.05 ? "좌측 우세 → 접근·긍정 경향" : an.faa <= -0.05 ? "우측 우세 → 회피·부정 경향" : "좌우 균형 → 중립";
 
   // ── 결과 ──
   return (
@@ -266,25 +342,86 @@ export default function AnalyzePage() {
         <section className="fx2-card fx2-outline text-center py-8 lg:col-span-8 lg:col-start-3">
           <p className="text-5xl">{info.emoji}</p>
           <h2 className="mt-3 text-2xl font-bold text-[#111827] dark:text-white">{st}</h2>
-          <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-300 max-w-xs mx-auto leading-relaxed">{info.desc}</p>
+          <span
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold"
+            style={{ backgroundColor: `${CONF_CLR[conf.label]}1A`, color: CONF_CLR[conf.label] }}
+          >
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CONF_CLR[conf.label] }} />
+            신뢰도 {conf.label} ({conf.score})
+          </span>
+          <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-300 max-w-sm mx-auto leading-relaxed">{info.desc}</p>
           <p className="mt-3 inline-block rounded-full bg-[#EAF0F8] px-4 py-1.5 text-xs font-semibold text-[#374151] dark:bg-slate-800 dark:text-slate-200">{info.tip}</p>
           <p className="mt-3 text-[10px] text-[#9CA3AF] dark:text-slate-500">
-            {new Date(session.startedAt).toLocaleString("ko-KR")} · {formatMs(session.durationMs)} · {avgBpm > 0 ? `${avgBpm}bpm` : ""}
+            {new Date(session.startedAt).toLocaleString("ko-KR")} · {formatMs(session.durationMs)}{avgBpm > 0 ? ` · ${avgBpm}bpm` : ""}
+          </p>
+        </section>
+
+        {/* Valence–Arousal 2D 좌표 */}
+        <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 text-center">정서 좌표 (Valence–Arousal)</p>
+          <div className="relative mx-auto mt-4 aspect-square w-full max-w-[260px] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+            {/* 사분면 틴트 */}
+            <div className="absolute left-0 top-0 h-1/2 w-1/2 bg-red-500/5" />
+            <div className="absolute right-0 top-0 h-1/2 w-1/2 bg-blue-500/5" />
+            <div className="absolute left-0 bottom-0 h-1/2 w-1/2 bg-amber-500/5" />
+            <div className="absolute right-0 bottom-0 h-1/2 w-1/2 bg-green-500/5" />
+            {/* 축 */}
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-300 dark:border-slate-600" />
+            <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-gray-300 dark:border-slate-600" />
+            {/* 축 레이블 */}
+            <span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">높은 각성</span>
+            <span className="absolute left-1/2 bottom-1 -translate-x-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">낮은 각성</span>
+            <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">부정</span>
+            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-[#9CA3AF] dark:text-slate-500">긍정</span>
+            {/* 좌표점 */}
+            <div
+              className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white shadow dark:ring-slate-900 transition-all"
+              style={{ left: `${dotLeft}%`, top: `${dotTop}%`, backgroundColor: info.color }}
+            />
+          </div>
+          <div className="mt-4 flex justify-center gap-8">
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: info.color }}>{vTxt}</p>
+              <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">정서가 (FAA {an.faa >= 0 ? "+" : ""}{an.faa.toFixed(2)})</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: info.color }}>{aTxt}</p>
+              <p className="text-[10px] text-[#9CA3AF] dark:text-slate-500 mt-0.5">각성도 {an.arousalFromHrv ? "(EEG+HRV)" : "(EEG)"}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* 좌우 알파 비대칭 (FAA) */}
+        <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400">전전두 알파 비대칭</p>
+          <div className="mt-3 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-16 text-[11px] text-[#6B7280] dark:text-slate-400">좌 (CH1)</span>
+              <div className="relative h-2.5 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
+                <div className="absolute inset-y-0 left-0 rounded-full bg-[#06B6D4]" style={{ width: `${barL}%` }} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-16 text-[11px] text-[#6B7280] dark:text-slate-400">우 (CH2)</span>
+              <div className="relative h-2.5 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
+                <div className="absolute inset-y-0 left-0 rounded-full bg-[#2563EB]" style={{ width: `${barR}%` }} />
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 text-center text-xs font-semibold text-[#111827] dark:text-white">{faaDir}</p>
+          <p className="mt-1 text-center text-[10px] text-[#9CA3AF] dark:text-slate-500 leading-relaxed">
+            알파 파워는 피질 활성과 역상관 · 이마 2채널 기반 전전두 추정치 (정통 F3/F4 아님)
           </p>
         </section>
 
         {/* 주파수 대역 분포 */}
         <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 text-center">주파수 대역 분포</p>
-
-          {/* 비율 바 */}
           <div className="mt-4 flex h-4 overflow-hidden rounded-full">
             {(["theta", "alpha", "beta"] as const).map((b) => (
               <div key={b} style={{ width: `${bands[b]}%`, backgroundColor: BAND_CLR[b] }} className="transition-all" />
             ))}
           </div>
-
-          {/* 범례 */}
           <div className="mt-3 flex justify-center gap-5">
             {(["theta", "alpha", "beta"] as const).map((b) => (
               <div key={b} className="text-center">
@@ -297,39 +434,26 @@ export default function AnalyzePage() {
               </div>
             ))}
           </div>
-
-          <p className="mt-3 text-center text-[10px] text-[#9CA3AF] dark:text-slate-500">우세: {dom === "Theta" ? "세타" : dom === "Alpha" ? "알파" : dom === "Beta" ? "베타" : "혼합"} · Delta 미측정</p>
+          <p className="mt-3 text-center text-[10px] text-[#9CA3AF] dark:text-slate-500">우세: {an.dom === "Theta" ? "세타" : an.dom === "Alpha" ? "알파" : an.dom === "Beta" ? "베타" : "혼합"} · Delta 미측정</p>
         </section>
 
-        {/* 점수 + 설명 */}
+        {/* 참고 지표 */}
         <section className="fx2-card fx2-outline lg:col-span-8 lg:col-start-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 mb-3">상태 점수</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6B7280] dark:text-slate-400 mb-3">참고 지표</p>
           <div className="space-y-2">
             {SCORE_META.map(({ key, label, color }) => (
               <div key={key} className="flex items-center gap-2">
                 <span className="w-12 text-[11px] text-[#6B7280] dark:text-slate-400">{label}</span>
                 <div className="relative h-2 flex-1 rounded-full bg-gray-100 dark:bg-slate-800">
-                  <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{ width: `${sc[key]}%`, backgroundColor: color }} />
+                  <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{ width: `${an.scores[key]}%`, backgroundColor: color }} />
                 </div>
-                <span className="w-7 text-right text-xs font-bold text-[#111827] dark:text-white">{sc[key]}</span>
+                <span className="w-7 text-right text-xs font-bold text-[#111827] dark:text-white">{an.scores[key]}</span>
               </div>
             ))}
           </div>
-
-          <div className="mt-4 rounded-xl bg-[#F8FAFC] p-4 dark:bg-slate-800/50 text-xs leading-relaxed text-[#6B7280] dark:text-slate-300 space-y-2">
-            <p>
-              <span className="font-semibold text-[#111827] dark:text-white">집중도 {sc.focus}</span> — {sc.focus >= 50 ? "베타파 활동이 높아 인지 작업에 몰입하고 있습니다." : sc.focus >= 20 ? "보통 수준의 집중 상태입니다. 주의력이 분산될 수 있습니다." : "집중력이 낮은 상태입니다. 뇌가 휴식을 원하고 있을 수 있습니다."}
-            </p>
-            <p>
-              <span className="font-semibold text-[#111827] dark:text-white">피로도 {sc.fatigue}</span> — {sc.fatigue >= 50 ? "세타파가 우세하여 피로가 쌓여 있습니다. 충분한 휴식이 필요합니다." : sc.fatigue >= 20 ? "약간의 피로감이 감지됩니다." : "피로도가 낮고 컨디션이 양호합니다."}
-            </p>
-            <p>
-              <span className="font-semibold text-[#111827] dark:text-white">이완도 {sc.relax}</span> — {sc.relax >= 50 ? "알파파가 활발하여 심신이 안정된 상태입니다." : sc.relax >= 20 ? "적당히 이완된 상태입니다." : "이완이 부족합니다. 긴장을 풀어보세요."}
-            </p>
-            <p>
-              <span className="font-semibold text-[#111827] dark:text-white">긴장도 {sc.tension}</span> — {sc.tension >= 50 ? "고주파 베타/감마 활동이 높아 스트레스 상태일 수 있습니다." : sc.tension >= 20 ? "가벼운 긴장감이 있습니다." : "긴장도가 낮고 편안한 상태입니다."}
-            </p>
-          </div>
+          <p className="mt-3 text-[10px] text-[#9CA3AF] dark:text-slate-500 leading-relaxed">
+            ※ 참고 지표는 Valence–Arousal 추정에서 파생된 보조 수치입니다. 신호 유효율 {eegRate}%{satRate > 0 ? ` · 포화 ${satRate}%` : ""}.
+          </p>
         </section>
 
         {/* HRV */}
@@ -365,7 +489,10 @@ export default function AnalyzePage() {
 
         {/* 하단 */}
         <section className="fx2-card fx2-outline space-y-3 lg:col-span-8 lg:col-start-3">
-          <p className="text-[10px] text-center text-[#9CA3AF] dark:text-slate-500">※ 건강 정보 참고용이며 의료 진단이 아닙니다.</p>
+          <p className="text-[10px] text-center text-[#9CA3AF] dark:text-slate-500 leading-relaxed">
+            ※ 본 결과는 전전두 알파 비대칭(FAA)·Valence–Arousal 모델에 기반한 <b>연구기반 추정치</b>이며, 감정의 직접 판독이나 의료 진단이 아닙니다.
+            단일 측정·이마 2채널·개인 baseline 부재로 인한 한계가 있습니다.
+          </p>
           <div className="flex gap-2">
             <button type="button" onClick={() => { setCopied(false); setModal(true); }}
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white hover:opacity-90">
@@ -394,6 +521,7 @@ export default function AnalyzePage() {
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800">
               <p className="text-center text-2xl">{info.emoji}</p>
               <p className="text-center text-sm font-bold text-[#111827] dark:text-white mt-1">{st}</p>
+              <p className="text-center text-[11px] mt-1" style={{ color: CONF_CLR[conf.label] }}>신뢰도 {conf.label} · 정서가 {vTxt} · 각성 {aTxt}</p>
               <div className="mt-2 flex justify-center gap-3 text-[11px]">
                 {(["theta", "alpha", "beta"] as const).map((b) => (
                   <span key={b} style={{ color: BAND_CLR[b] }} className="font-semibold">{BAND_KR[b]} {bands[b].toFixed(1)}%</span>

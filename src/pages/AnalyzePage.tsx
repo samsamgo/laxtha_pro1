@@ -420,58 +420,83 @@ export default function AnalyzePage() {
 
       {/* ── 공유 모달 ── */}
       {modal ? (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={() => setModal(false)}>
-          <div className="w-full max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4" onClick={() => setModal(false)}>
+          <div
+            className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-7 shadow-2xl dark:bg-slate-900 animate-[fadeInUp_0.25s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 모바일 핸들 */}
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 dark:bg-slate-700 sm:hidden" />
+
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-[#111827] dark:text-white">결과 공유하기</h3>
-              <button type="button" onClick={() => setModal(false)} className="rounded-lg p-1 text-[#6B7280] hover:bg-gray-100 dark:hover:bg-slate-800">
+              <button type="button" onClick={() => setModal(false)} className="rounded-full p-1.5 text-[#6B7280] hover:bg-gray-100 dark:hover:bg-slate-800">
                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
               </button>
             </div>
 
-            {/* 미리보기 카드 */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-              <p className="text-center text-2xl">{info.emoji}</p>
-              <p className="text-center text-sm font-bold mt-1" style={{ color: info.color }}>{st}</p>
-              <p className="text-center text-[11px] text-[#6B7280] dark:text-slate-300 mt-0.5">{info.headline}</p>
-              <div className="mt-2 flex justify-center gap-3 text-[11px] font-semibold text-[#374151] dark:text-slate-200">
-                <span>기분 {moodTxt}</span>
-                <span>에너지 {energyTxt}</span>
+            {/* 공유 카드 미리보기 */}
+            <div
+              className="relative overflow-hidden rounded-2xl px-6 py-7 text-center"
+              style={{ background: `linear-gradient(160deg, ${info.color}26, ${info.color}0A 60%, transparent)` }}
+            >
+              {/* 장식 원 */}
+              <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-20 blur-2xl" style={{ backgroundColor: info.color }} />
+              <div className="pointer-events-none absolute -left-10 bottom-0 h-24 w-24 rounded-full opacity-10 blur-2xl" style={{ backgroundColor: info.color }} />
+
+              <div className="relative">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full text-5xl shadow-sm" style={{ backgroundColor: `${info.color}26` }}>
+                  {info.emoji}
+                </div>
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.25em]" style={{ color: info.color }}>EEG 감정 분석</p>
+                <h4 className="mt-1 text-2xl font-extrabold" style={{ color: info.color }}>{st}</h4>
+                <p className="mt-1.5 text-xs text-[#6B7280] dark:text-slate-300">{info.headline}</p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-[#374151] shadow-sm dark:bg-slate-800/70 dark:text-slate-200">기분 {moodTxt}</span>
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-[#374151] shadow-sm dark:bg-slate-800/70 dark:text-slate-200">에너지 {energyTxt}</span>
+                </div>
+                <p className="mt-5 text-[10px] font-bold tracking-[0.2em] text-[#9CA3AF] dark:text-slate-500">LAXTHA · neuroNicle FX2</p>
               </div>
             </div>
 
             {/* 공유 버튼들 */}
-            <div className="mt-4 grid grid-cols-4 gap-2">
+            <div className="mt-5 grid grid-cols-4 gap-2">
               <button type="button"
                 onClick={() => { window.open(`https://sharer.kakao.com/talk/friends/picker/shorturl?url=${encodeURIComponent("https://laxtha.netlify.app/analyze")}&text=${encodeURIComponent(shareText)}`, "_blank", "noopener,width=480,height=640"); }}
-                className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 py-3 text-xs font-semibold text-[#111827] hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800">
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="#FEE500">
-                  <path d="M12 3C6.48 3 2 6.58 2 10.94c0 2.8 1.86 5.27 4.66 6.67-.15.56-.96 3.6-.99 3.83 0 0-.02.17.09.24.11.06.24.01.24.01.32-.04 3.7-2.44 4.28-2.86.56.08 1.14.12 1.72.12 5.52 0 10-3.58 10-7.94C22 6.58 17.52 3 12 3z"/>
-                </svg>
-                카카오톡
+                className="group flex flex-col items-center gap-1.5">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FEE500] transition-transform group-hover:-translate-y-0.5 group-active:scale-95">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="#3C1E1E">
+                    <path d="M12 3C6.48 3 2 6.58 2 10.94c0 2.8 1.86 5.27 4.66 6.67-.15.56-.96 3.6-.99 3.83 0 0-.02.17.09.24.11.06.24.01.24.01.32-.04 3.7-2.44 4.28-2.86.56.08 1.14.12 1.72.12 5.52 0 10-3.58 10-7.94C22 6.58 17.52 3 12 3z"/>
+                  </svg>
+                </span>
+                <span className="text-[11px] font-semibold text-[#6B7280] dark:text-slate-400">카카오톡</span>
               </button>
-              <button type="button" onClick={handleCopy}
-                className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 py-3 text-xs font-semibold text-[#111827] hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800">
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="#5865F2">
-                  <path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.11 13.11 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-                </svg>
-                {copied ? "복사됨!" : "디스코드"}
+              <button type="button" onClick={handleCopy} className="group flex flex-col items-center gap-1.5">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#5865F2] transition-transform group-hover:-translate-y-0.5 group-active:scale-95">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="#fff">
+                    <path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.11 13.11 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                  </svg>
+                </span>
+                <span className="text-[11px] font-semibold text-[#6B7280] dark:text-slate-400">{copied ? "복사됨!" : "디스코드"}</span>
               </button>
               <button type="button"
                 onClick={() => { window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,width=550,height=420"); }}
-                className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 py-3 text-xs font-semibold text-[#111827] hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800">
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-                X
+                className="group flex flex-col items-center gap-1.5">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black transition-transform group-hover:-translate-y-0.5 group-active:scale-95 dark:bg-slate-700">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#fff">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </span>
+                <span className="text-[11px] font-semibold text-[#6B7280] dark:text-slate-400">X</span>
               </button>
-              <button type="button" onClick={handleLinkCopy}
-                className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 py-3 text-xs font-semibold text-[#111827] hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-800">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 text-[#6B7280]">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" />
-                </svg>
-                {linkCopied ? "복사됨!" : "링크 복사"}
+              <button type="button" onClick={handleLinkCopy} className="group flex flex-col items-center gap-1.5">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF0F8] transition-transform group-hover:-translate-y-0.5 group-active:scale-95 dark:bg-slate-800">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 text-[#2563EB]">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <span className="text-[11px] font-semibold text-[#6B7280] dark:text-slate-400">{linkCopied ? "복사됨!" : "링크"}</span>
               </button>
             </div>
           </div>

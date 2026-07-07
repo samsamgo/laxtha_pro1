@@ -19,41 +19,44 @@ FX2 뇌파(EEG) 장치 출력을 Chrome 전용 실시간 웹 대시보드로 시
 
 ```
 src/
-├── App.tsx                     # 라우터 (/live, /summary) — * → /live redirect
+├── App.tsx                     # 라우터 (/live, /summary, /analyze) — * → /live redirect, lazy + Suspense
 ├── main.tsx                    # React 진입점
 ├── index.css                   # Tailwind + .fx2-card / .fx2-title 등 전역 컴포넌트 클래스
 │
 ├── types/
 │   ├── fx2.ts                  # Fx2State, Fx2IncomingMessage, DeviceMode 등 핵심 타입
-│   ├── eegRecorder.ts          # EEG 세션 녹화 타입 (EegSessionData, ExtWindowSeconds 등)
-│   └── web-apis.d.ts           # Web Serial / Web Bluetooth 타입 선언
+│   ├── eegRecorder.ts          # EEG 세션 녹화 타입 (EegSample, EegSessionData 등)
+│   └── web-apis.d.ts           # Web Serial 타입 선언
 │
 ├── lib/
 │   ├── fx2Realtime.ts          # 순수 함수 계층: 상태 생성/업데이트/요약/파싱
-│   │                           # MAX_CHART_POINTS=18000, LOG_HISTORY_LIMIT=40
-│   └── eegSessionRecorder.ts   # EegSessionRecorder 클래스: 데이터 수집/내보내기
+│   │                           # MAX_CHART_POINTS=300000, LOG_HISTORY_LIMIT=40
+│   ├── eegSessionRecorder.ts   # EegSessionRecorder 클래스: 데이터 수집/CSV·JSON 내보내기
+│   ├── fftAccumulator.ts       # 파워스펙트럼 대역 파워(theta/alpha/beta/gamma) 누적
+│   ├── external.ts             # 외부 연동/공유 엔드포인트 (분석 공유 모달)
+│   ├── timeFormat.ts           # KST 시각 포맷 유틸
+│   └── useFocusTrap.ts         # 모달 포커스 트랩 훅
 │
 ├── services/
-│   └── fx2Hardware.ts          # Fx2HardwareService: OMC-M10 SPP(Web Serial) / UART / BLE fallback
+│   └── fx2Hardware.ts          # Fx2HardwareService: OMC-M10/UART SPP (Web Serial) 연결·파싱
 │
 ├── context/
-│   ├── Fx2RealtimeContext.tsx  # 전역 상태: 세션, 모드, 하드웨어 상태
-│   │                           # mockTimer(1Hz setInterval), hardwareRef
+│   ├── Fx2RealtimeContext.tsx  # 전역 상태: 세션, 모드, 하드웨어 상태, 세션 녹화(hardwareRef)
 │   └── ThemeContext.tsx        # 다크모드 (localStorage + .dark 클래스)
-│
-├── hooks/
-│   └── useEegSessionRecorder.ts # EEG 세션 녹화 훅
 │
 ├── components/
 │   ├── Layout.tsx              # 사이드바 + 햄버거 메뉴 (모바일) + 토스트 알림 시스템
+│   ├── ErrorBoundary.tsx       # React 에러 바운더리
 │   ├── EEGChartV2.tsx          # 메인 EEG 차트 (uPlot, memo 적용, ResizeObserver cleanup)
 │   │                           # 윈도우 10/30/60/120/300s (더보기 드롭다운)
 │   │                           # 일시정지, 줌/팬, Go Live, PNG 캡처
-│   └── LineChartCard.tsx       # 보조 차트 (uPlot, 4Hz throttle, ResizeObserver, no header)
+│   ├── LineChartCard.tsx       # 보조 차트 (uPlot, 4Hz throttle, ResizeObserver, no header)
+│   └── FftBandChart.tsx        # FFT 대역 파워 차트 (분석 페이지)
 │
 └── pages/
-    ├── LivePage.tsx            # 실시간 대시보드 — 모드 선택 + 측정 시작/종료 CTA 포함
-    └── SummaryPage.tsx         # 세션 요약
+    ├── LivePage.tsx            # 실시간 대시보드 — 측정 시작/종료 CTA (실기기 연결)
+    ├── SummaryPage.tsx         # 세션 요약
+    └── AnalyzePage.tsx         # JSON 업로드 → 뇌파 감정 분석 (FAA + Valence-Arousal)
 ```
 
 ---
@@ -61,7 +64,7 @@ src/
 ## 데이터 흐름
 
 ```
-Demo:     setInterval(1000ms) → createMockMessage() → applyIncomingMessage() → setState
+※ 데모/mock 모드는 제거됨 — 현재는 실기기(Web Serial) 전용. 하드웨어 없이는 라이브 대시보드 구동 불가.
 OMC-M10:  Bluetooth SPP(COM10/AMP-SPP) → Web Serial → processBinaryBuffer() → parseBinaryFrame() → parseUartBinaryFrame() → applyIncomingMessage() → setState
 
 Fx2State 배열 상한: ch1/ch2/timestamps/ppg/sdppg/rrInterval = 72000pt (250Hz 약 4.8분), heartRateHistory = 180pt, logs = 40건
@@ -141,9 +144,11 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 
 ---
 
-## 현재 상태 (2026-05-06 기준)
+## 현재 상태 (2026-07-07 기준)
 
-최신 커밋: `608ca72 fix(EEGChartV2): freeze Y axis between 1s updates to stop plotted values shifting`
+최신 커밋: `598f171 style(analyze): 공유 모달 리디자인 — 공유 카드 + 브랜드 아이콘 버튼`
+
+> 문서 최신화(2026-07): 데모/mock 모드 제거(실기기 전용) · 미사용 의존성 `lightweight-charts` 제거 · 파일 맵/라우트(`/analyze`) 반영 · MAX_CHART_POINTS=300000. 남은 로드맵은 아래 "미완료"의 실기기 검증뿐이며 빌드/TS는 정상.
 
 ### 완료
 - [x] EEGChartV2 (uPlot, 크로스헤어/줌/팬/일시정지/Go Live/PNG 캡처)
@@ -269,7 +274,7 @@ Tailwind 클래스: `fx2-card`, `fx2-outline`, `fx2-surface`, `fx2-title` (index
 ## 개발 명령어
 
 ```bash
-cd /c/Users/dmast/Desktop/pro/laxtha_pro1
+cd /c/Users/user/Desktop/claude/github_inspect/laxtha_pro1
 
 npm run dev      # 개발 서버 (localhost:5173)
 npm run build    # tsc + vite build → dist/

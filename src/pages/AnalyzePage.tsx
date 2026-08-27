@@ -12,6 +12,8 @@ const formatMs = (ms: number) => {
   return `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+// 로지스틱 매핑: 실수 → (0,100) 개구간. 하드 clamp 없이 부드러운 포화 → 지표 0/100 고착 방지.
+const logistic100 = (x: number, x0: number, k: number) => 100 / (1 + Math.exp(-k * (x - x0)));
 
 // ── 타입 ──
 // 주파수 대역(양 채널 평균, 상대비율 %) — 분포 표시용
@@ -71,15 +73,25 @@ function computeAnalysis(session: EegSessionExport): Analysis | null {
   const betaAlpha = b / (a + eps);
   const arousalEeg = 1 / (1 + Math.exp(-(betaAlpha - 1) * 1.5)); // 0..1, center=1.0
 
-  // 참고 지표 (V-A + 밴드에서 파생)
-  const aPct = arousalEeg * 100;
-  const vPct = (valence + 1) / 2 * 100;
-  const gnorm = clamp(g / 50, 0, 1);
+  // ── 참고 지표 (상태 점수) ──
+  // 뇌파 문헌 기반 지수를 로지스틱으로 (0,100)에 매핑하고, 경계가 있는 항들의 볼록결합으로 합성한다.
+  // 기존 선형결합+clamp 방식은 조합이 음수가 되면 26~35% 확률로 0에 고착됐다. 이를 구조적으로 제거한다.
+  const fT = relT / 100, fA = relA / 100, fB = relB / 100; // θ/α/β 상대비 (합 ≈ 1)
+  const fG = g / (t + a + b + g + eps);                    // 감마 상대비 (스케일 불변) — 기존 g/50 magic 상수 대체
+  const aPct = arousalEeg * 100;              // 각성 0..100 (EEG 기반, HRV 블렌드는 호출부에서 상태/기분에만 적용)
+  const calm = (1 - arousalEeg) * 100;        // 저각성(차분) 0..100
+  const vPct = (valence + 1) / 2 * 100;       // 정서가 0..100 (높을수록 긍정)
+  const neg = (1 - valence) / 2 * 100;        // 부정성 0..100
+  const ENG = logistic100(fB / (fA + fT + eps), 0.45, 4); // 관여/집중 지수(Pope 1995): β/(α+θ)
+  const ALP = logistic100(fA / (fA + fB + eps), 0.5, 5);  // 알파 우세 (이완 핵심)
+  const THE = logistic100(fT / (fA + fB + eps), 0.5, 5);  // 세타 우세 (졸림/피로 핵심)
+  const GAM = logistic100(fG, 0.12, 15);                  // 감마 우세 (과각성/긴장 기여)
+  const NEUTRAL = 50; // 단일 단시간 측정 → 중립(50) 사전확률로 약하게 견인
   const scores: Scores = {
-    focus: clamp(Math.round(relB * 1.0 - relT * 0.4 + (aPct - 50) * 0.4), 0, 100),
-    relax: clamp(Math.round(relA * 1.2 - (aPct - 50) * 0.5 + (vPct - 50) * 0.3), 0, 100),
-    tension: clamp(Math.round((aPct - 50) * 0.9 + (vPct < 50 ? (50 - vPct) * 0.6 : 0) + gnorm * 25), 0, 100),
-    fatigue: clamp(Math.round(relT * 1.1 - relB * 0.3 + (50 - aPct) * 0.4), 0, 100),
+    focus:   clamp(Math.round(0.55 * ENG + 0.30 * aPct + 0.15 * NEUTRAL), 0, 100),
+    relax:   clamp(Math.round(0.42 * ALP + 0.30 * calm + 0.18 * vPct + 0.10 * NEUTRAL), 0, 100),
+    tension: clamp(Math.round(0.45 * aPct + 0.27 * neg + 0.18 * GAM + 0.10 * NEUTRAL), 0, 100),
+    fatigue: clamp(Math.round(0.45 * THE + 0.32 * calm + 0.13 * (100 - ENG) + 0.10 * NEUTRAL), 0, 100),
   };
 
   // 우세 대역
